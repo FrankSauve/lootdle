@@ -1,0 +1,8 @@
+# Use LF everywhere so files behave the same on Windows, in Docker and on the server.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.ogg binary
+*.mp3 binary
+*.wav binary
