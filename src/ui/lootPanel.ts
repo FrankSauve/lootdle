@@ -1,4 +1,5 @@
 import { itemIcon } from '../render/art/icons.ts';
+import type { PixelImage } from '../render/art/pixels.ts';
 import { RARITY_COLORS, RARITY_NAMES, SYNERGIES } from '../sim/items.ts';
 import type { Item } from '../sim/items.ts';
 import { describeItem } from '../sim/loot.ts';
@@ -12,7 +13,11 @@ export function cssColor(rgb: number): string {
 
 /** A pixel-art canvas of the item's icon, scaled up with crisp edges by CSS. */
 export function itemIconCanvas(item: Item, scale: number): HTMLCanvasElement {
-  const img = itemIcon(item.slot, item.id);
+  return imageCanvas(itemIcon(item.slot, item.id), scale);
+}
+
+/** Draws a coded pixel image onto a canvas, scaled up with crisp edges by CSS. */
+export function imageCanvas(img: PixelImage, scale: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = img.width;
   canvas.height = img.height;

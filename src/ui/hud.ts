@@ -2,7 +2,8 @@ import { RARITY_COLORS, RARITY_NAMES, SIGNATURES } from '../sim/items.ts';
 import type { SimState } from '../sim/sim.ts';
 import { elapsedSeconds } from '../sim/sim.ts';
 import type { Loadout } from '../sim/sim.ts';
-import { cssColor, itemIconCanvas } from './lootPanel.ts';
+import { gearIcon } from '../render/art/uiIcons.ts';
+import { cssColor, imageCanvas, itemIconCanvas } from './lootPanel.ts';
 
 export function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -39,9 +40,7 @@ export class Hud {
         <span class="hud-gear"></span>
         <span><span class="hud-label">Kills</span> <b class="hud-kills">0</b></span>
         <span><span class="hud-label">Bosses</span> <b class="hud-bosses">0</b></span>
-        <button type="button" class="hud-settings" title="Settings (Esc)" aria-label="Settings">
-          <span class="hud-settings-gear"></span>
-        </button>
+        <button type="button" class="hud-settings" title="Settings (Esc)" aria-label="Settings"></button>
       </div>
     `;
     parent.prepend(this.topBar);
@@ -68,7 +67,14 @@ export class Hud {
     this.banner = q(this.root, '.hud-banner');
     this.results = q(this.root, '.hud-results');
     q(this.root, '.hud-restart').addEventListener('click', onRestart);
-    q(this.topBar, '.hud-settings').addEventListener('click', (e) => {
+    // A pixel-art gear: one canvas for normal, one (gold) shown on hover.
+    const gearButton = q(this.topBar, '.hud-settings');
+    const normal = imageCanvas(gearIcon(0xa99bc4), 2);
+    const hover = imageCanvas(gearIcon(0xffc94a), 2);
+    normal.classList.add('gear-normal');
+    hover.classList.add('gear-hover');
+    gearButton.append(normal, hover);
+    gearButton.addEventListener('click', (e) => {
       onOpenSettings();
       (e.currentTarget as HTMLElement).blur();
     });

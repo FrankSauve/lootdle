@@ -235,8 +235,8 @@ body {
 .hud-settings {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   border: 3px solid var(--panel-edge);
   background: var(--ink);
@@ -249,20 +249,15 @@ body {
   border-color: var(--gold);
 }
 
-.hud-settings-gear {
-  width: 14px;
-  height: 14px;
-  background: var(--dim);
-  /* A pixel gear, cut out of a square with a stepped mask. */
-  clip-path: polygon(
-    36% 0, 64% 0, 64% 14%, 79% 14%, 79% 21%, 86% 21%, 86% 36%, 100% 36%, 100% 64%, 86% 64%,
-    86% 79%, 79% 79%, 79% 86%, 64% 86%, 64% 100%, 36% 100%, 36% 86%, 21% 86%, 21% 79%, 14% 79%,
-    14% 64%, 0 64%, 0 36%, 14% 36%, 14% 21%, 21% 21%, 21% 14%, 36% 14%
-  );
+.hud-settings .gear-hover,
+.hud-settings:hover .gear-normal,
+.hud-settings:focus-visible .gear-normal {
+  display: none;
 }
 
-.hud-settings:hover .hud-settings-gear {
-  background: var(--gold);
+.hud-settings:hover .gear-hover,
+.hud-settings:focus-visible .gear-hover {
+  display: block;
 }
 
 .settings-overlay {
