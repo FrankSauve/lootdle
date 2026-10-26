@@ -85,3 +85,10 @@ Handy previews (today's date seeds them): `?player=p12` (blades + phoenix), `?pl
 The gear button in the top bar (or `Esc`) opens the settings window and pauses the game. Settings
 are saved in the browser. To add one, extend `Settings`, `DEFAULT_SETTINGS` and `SETTING_DEFS` in
 `src/settings.ts`; the window builds its rows from that list.
+
+## Debug menu (dev only)
+
+Under `npm run dev` / the Docker dev service, a **DEBUG** button (bottom-left, or **F2**) opens a panel with:
+player immunity, set HP, game speed (paused to 8x), reroll loot, load another player's loot by name,
+back to today's loot, kill all enemies, and a live readout of the current build.
+It is loaded behind `import.meta.env.DEV`, so it is not part of production builds (`prod` profile on :8080).

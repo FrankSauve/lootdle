@@ -6,11 +6,19 @@ const UP = ['KeyW', 'ArrowUp'];
 const DOWN = ['KeyS', 'ArrowDown'];
 const MOVE_KEYS = new Set([...LEFT, ...RIGHT, ...UP, ...DOWN]);
 
+function isTyping(e: KeyboardEvent): boolean {
+  const t = e.target;
+  return t instanceof HTMLInputElement && t.type !== 'checkbox'
+    ? true
+    : t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
+}
+
 /** WASD / arrow-key movement. The mobile virtual joystick will produce the same MoveInput. */
 export function createKeyboardInput(target: Window = window) {
   const down = new Set<string>();
 
   target.addEventListener('keydown', (e) => {
+    if (isTyping(e)) return; // don't walk around while typing in a text box (debug menu)
     if (MOVE_KEYS.has(e.code)) e.preventDefault(); // stop arrow keys from scrolling the page
     down.add(e.code);
   });

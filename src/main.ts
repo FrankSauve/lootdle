@@ -3,13 +3,16 @@ import './style.css';
 import { createKeyboardInput } from './input/keyboard.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, GameRenderer } from './render/renderer.ts';
 import { hashSeed } from './sim/rng.ts';
+import { damageEnemy } from './sim/combat.ts';
 import { DT, createSim, generateLoadout, stepSim } from './sim/sim.ts';
-import type { SimState } from './sim/sim.ts';
+import type { Loadout, SimState } from './sim/sim.ts';
 import { SettingsStore } from './settings.ts';
 import { Hud } from './ui/hud.ts';
 import { LootPanel } from './ui/lootPanel.ts';
 import { SettingsWindow } from './ui/settingsWindow.ts';
 
+/** Caps catch-up work per frame (matters at high debug game speeds). */
+const MAX_STEPS_PER_FRAME = 600;
 /** Never simulate more than this much time in one frame (e.g. after a long hitch). */
 const MAX_FRAME_SECONDS = 0.25;
 
@@ -61,7 +64,9 @@ async function main() {
   const today = new Date().toISOString().slice(0, 10);
   const worldSeed = hashSeed(`lootdle:${today}`);
   const playerSeed = hashSeed(`lootdle:${today}:${getPlayerId()}`);
-  const loadout = generateLoadout(playerSeed);
+  const todaysLoadout = generateLoadout(playerSeed);
+  // Debug-only overrides (set from the dev debug menu; they stay at their defaults otherwise).
+  const debug = { godMode: false, speed: 1, loot: null as Loadout | null };
 
   let sim: SimState;
   let started = false;
@@ -70,7 +75,8 @@ async function main() {
   let revealUnlockAt = 0;
 
   const newRun = () => {
-    sim = createSim({ worldSeed, playerSeed, loadout });
+    const loadout = debug.loot ?? todaysLoadout;
+    sim = createSim({ worldSeed, playerSeed: debug.loot ? debug.loot.seed : playerSeed, loadout, godMode: debug.godMode });
     started = false;
     resultsShown = false;
     accumulator = 0;
@@ -89,7 +95,50 @@ async function main() {
   const settingsWindow = new SettingsWindow(container, settings);
   newRun();
 
+  // Developer tools: loaded only by the Vite dev server, never included in production builds.
+  let debugMenu: { update(now: number): void } | null = null;
+  if (import.meta.env.DEV) {
+    const { DebugMenu } = await import('./debug/debugMenu.ts');
+    debugMenu = new DebugMenu(container, {
+      sim: () => sim,
+      godMode: () => debug.godMode,
+      setGodMode: (on) => {
+        debug.godMode = on;
+        sim.godMode = on;
+      },
+      speed: () => debug.speed,
+      setSpeed: (x) => {
+        debug.speed = x;
+      },
+      setHp: (hp) => {
+        if (!Number.isFinite(hp)) return;
+        const p = sim.player;
+        const value = Math.max(1, Math.round(hp));
+        if (value > p.maxHp) p.maxHp = value;
+        p.hp = value;
+      },
+      rerollLoot: () => {
+        debug.loot = generateLoadout((Math.random() * 2 ** 32) >>> 0);
+        newRun();
+      },
+      loadPlayerLoot: (name) => {
+        debug.loot = generateLoadout(hashSeed(`lootdle:${today}:${name}`));
+        newRun();
+      },
+      resetLoot: () => {
+        debug.loot = null;
+        newRun();
+      },
+      killAll: () => {
+        const e = sim.enemies;
+        for (let i = 0; i < e.count; i++) damageEnemy(sim, i, 1e9);
+        e.compact();
+      },
+    });
+  }
+
   window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
     if (e.code === 'Escape') settingsWindow.toggle();
     else if (e.code === 'KeyR' && sim.over && !settingsWindow.isOpen) newRun();
   });
@@ -107,8 +156,9 @@ async function main() {
     }
 
     if (started && !sim.over && !paused) {
-      accumulator += frameSeconds;
-      while (accumulator >= DT && !sim.over) {
+      accumulator += frameSeconds * debug.speed;
+      let steps = 0;
+      while (accumulator >= DT && !sim.over && steps++ < MAX_STEPS_PER_FRAME) {
         stepSim(sim, input.read());
         accumulator -= DT;
         renderer.handleEvents(sim.events);
@@ -119,9 +169,12 @@ async function main() {
           else if (ev.type === 'revive') hud.showBanner('Phoenix Heart! Reborn from the ashes', 'boss', 2200);
         }
       }
+      // Couldn't keep up (very high debug speed): drop the backlog instead of spiraling.
+      if (accumulator >= DT) accumulator %= DT;
     }
 
     renderer.render(sim, sim.over || !started ? 1 : accumulator / DT, paused ? 0 : frameSeconds);
+    debugMenu?.update(performance.now());
     hud.update(sim);
 
     if (sim.over && !resultsShown) {
