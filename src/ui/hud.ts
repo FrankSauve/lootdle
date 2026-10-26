@@ -1,3 +1,4 @@
+import { buildShareText, copyText } from '../share.ts';
 import { RARITY_COLORS, RARITY_NAMES, SIGNATURES } from '../sim/items.ts';
 import type { SimState } from '../sim/sim.ts';
 import { elapsedSeconds } from '../sim/sim.ts';
@@ -26,6 +27,9 @@ export class Hud {
   private readonly banner: HTMLElement;
   private readonly results: HTMLElement;
   private bannerTimeout = 0;
+  private shareText = '';
+  private shareButton!: HTMLElement;
+  private shareTimeout = 0;
   private last = { time: '', hp: -1, kills: -1, bosses: -1 };
 
   /** `playfield` is the element wrapping the game canvas; the HP bar is drawn on top of it. */
@@ -57,7 +61,10 @@ export class Hud {
         <div class="hud-results-build"></div>
         <div class="hud-results-gear"></div>
         <dl class="hud-results-stats"></dl>
-        <button type="button" class="hud-restart">Play again <span>(R)</span></button>
+        <div class="hud-results-buttons">
+          <button type="button" class="hud-share">Share result</button>
+          <button type="button" class="hud-restart">Play again <span>(R)</span></button>
+        </div>
       </div>
     `;
     parent.appendChild(this.root);
@@ -70,6 +77,14 @@ export class Hud {
     this.banner = q(this.root, '.hud-banner');
     this.results = q(this.root, '.hud-results');
     q(this.root, '.hud-restart').addEventListener('click', onRestart);
+    this.shareButton = q(this.root, '.hud-share');
+    this.shareButton.addEventListener('click', async (e) => {
+      const ok = await copyText(this.shareText);
+      this.shareButton.textContent = ok ? 'Copied!' : 'Copy failed';
+      window.clearTimeout(this.shareTimeout);
+      this.shareTimeout = window.setTimeout(() => (this.shareButton.textContent = 'Share result'), 2000);
+      (e.currentTarget as HTMLElement).blur();
+    });
     // A pixel-art gear: one canvas for normal, one (gold) shown on hover.
     const gearButton = q(this.topBar, '.hud-settings');
     const normal = imageCanvas(gearIcon(0xa99bc4), 2);
@@ -130,7 +145,9 @@ export class Hud {
     );
   }
 
-  showResults(state: SimState): void {
+  showResults(state: SimState, dateLabel: string): void {
+    this.shareText = buildShareText(state, dateLabel, elapsedSeconds(state));
+    this.shareButton.textContent = 'Share result';
     const s = state.stats;
     q(this.results, '.hud-results-time').textContent = `Survived ${formatTime(elapsedSeconds(state))}`;
     const rows: [string, string][] = [

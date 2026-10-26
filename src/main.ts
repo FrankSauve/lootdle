@@ -207,7 +207,7 @@ async function main() {
 
     if (sim.over && !resultsShown) {
       resultsShown = true;
-      hud.showResults(sim);
+      hud.showResults(sim, today);
     }
   });
 }
