@@ -4,7 +4,10 @@ import { createKeyboardInput } from './input/keyboard.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, GameRenderer } from './render/renderer.ts';
 import { hashSeed } from './sim/rng.ts';
 import { damageEnemy } from './sim/combat.ts';
-import { DT, createSim, generateLoadout, stepSim } from './sim/sim.ts';
+import { damageMultiplier, hpMultiplier } from './sim/director.ts';
+import { ENEMY_DEFS } from './sim/enemies.ts';
+import type { EnemyKind } from './sim/enemies.ts';
+import { ARENA_HEIGHT, ARENA_WIDTH, DT, createSim, generateLoadout, stepSim } from './sim/sim.ts';
 import type { Loadout, SimState } from './sim/sim.ts';
 import { SettingsStore } from './settings.ts';
 import { Hud } from './ui/hud.ts';
@@ -129,6 +132,20 @@ async function main() {
         debug.loot = null;
         newRun();
       },
+      spawn: (kind, count) => {
+        const p = sim.player;
+        const def = ENEMY_DEFS[kind as EnemyKind];
+        if (!def) return;
+        const hpMul = hpMultiplier(sim.tick * DT);
+        const dmgMul = damageMultiplier(sim.tick * DT);
+        // Appear in a ring 300 units from the player, on the roomier side of the arena.
+        const dir = p.x < ARENA_WIDTH / 2 ? 1 : -1;
+        for (let k = 0; k < count; k++) {
+          const x = Math.min(ARENA_WIDTH - 20, Math.max(20, p.x + dir * 300));
+          const y = Math.min(ARENA_HEIGHT - 20, Math.max(20, p.y + (k - (count - 1) / 2) * 30));
+          sim.enemies.spawn(kind as EnemyKind, x, y, hpMul, dmgMul);
+        }
+      },
       killAll: () => {
         const e = sim.enemies;
         for (let i = 0; i < e.count; i++) damageEnemy(sim, i, 1e9);
@@ -165,6 +182,7 @@ async function main() {
         for (const ev of sim.events) {
           if (ev.type === 'bossSpawned') hud.showBanner(`${ev.name} #${ev.number} appears`, 'boss');
           else if (ev.type === 'bossDefeated') hud.showBanner(`${ev.name} defeated!`, 'boss', 1400);
+          else if (ev.type === 'swarm') hud.showBanner('A swarm is coming!', 'doom', 1600);
           else if (ev.type === 'doom') hud.showBanner('Doom has awakened', 'doom', 3000);
           else if (ev.type === 'revive') hud.showBanner('Phoenix Heart! Reborn from the ashes', 'boss', 2200);
         }

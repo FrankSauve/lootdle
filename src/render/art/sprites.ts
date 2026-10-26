@@ -4,6 +4,7 @@
  */
 import { createImage, fillRect, fromAscii, getAlpha, getRgb, setPixel, shade } from './pixels.ts';
 import type { PixelImage } from './pixels.ts';
+import { buildEnemyArt } from './enemies.ts';
 
 const OUTLINE = 0x1a1420;
 
@@ -282,6 +283,15 @@ export interface ArtCatalog {
   brute: SpriteArt;
   slimelet: SpriteArt;
   giantSlime: SpriteArt;
+  rat: SpriteArt;
+  boar: SpriteArt;
+  spitter: SpriteArt;
+  bomber: SpriteArt;
+  knight: SpriteArt;
+  shaman: SpriteArt;
+  juggernaut: SpriteArt;
+  hiveQueen: SpriteArt;
+  lich: SpriteArt;
   knife: PixelImage;
   torch: PixelImage[];
   /** 1x1 white pixel for particles. */
@@ -293,6 +303,7 @@ export function buildArtCatalog(): ArtCatalog {
   const slimeletBase = { body: 0x6fd36a, width: 12, height: 10, eyeWidth: 1, eyeHeight: 2 };
   const giantBase = { body: 0x3fbf5a, width: 44, height: 32, eyeWidth: 3, eyeHeight: 4, crown: true };
 
+  const more = buildEnemyArt();
   const art: Omit<ArtCatalog, 'shadows'> = {
     player: { frames: [fromAscii('knight', KNIGHT, KNIGHT_PALETTE)], shadowWidth: 10 },
     chaser: { frames: [fromAscii('imp', IMP, IMP_PALETTE)], shadowWidth: 9 },
@@ -309,6 +320,15 @@ export function buildArtCatalog(): ArtCatalog {
       frames: [slime(giantBase), slime({ ...giantBase, squash: true })],
       shadowWidth: 46,
     },
+    rat: { frames: [more.rat], shadowWidth: 8 },
+    boar: { frames: [more.boar], shadowWidth: 16 },
+    spitter: { frames: [more.spitter], shadowWidth: 13 },
+    bomber: { frames: [more.bomber], shadowWidth: 11 },
+    knight: { frames: [more.knight], shadowWidth: 15 },
+    shaman: { frames: [more.shaman], shadowWidth: 11 },
+    juggernaut: { frames: [more.juggernaut], shadowWidth: 40 },
+    hiveQueen: { frames: [more.hiveQueen], shadowWidth: 36 },
+    lich: { frames: [more.lich], shadowWidth: 38 },
     knife: fromAscii('knife', KNIFE, KNIFE_PALETTE),
     torch: [fromAscii('torch-a', TORCH_A, TORCH_PALETTE), fromAscii('torch-b', TORCH_B, TORCH_PALETTE)],
     pixel: (() => {
@@ -319,7 +339,10 @@ export function buildArtCatalog(): ArtCatalog {
   };
 
   const shadows = new Map<number, PixelImage>();
-  for (const s of [art.player, art.chaser, art.flanker, art.brute, art.slimelet, art.giantSlime]) {
+  for (const s of [
+    art.player, art.chaser, art.flanker, art.brute, art.slimelet, art.giantSlime,
+    art.rat, art.boar, art.spitter, art.bomber, art.knight, art.shaman, art.juggernaut, art.hiveQueen, art.lich,
+  ]) {
     if (!shadows.has(s.shadowWidth)) {
       shadows.set(s.shadowWidth, ellipse(s.shadowWidth, Math.max(3, Math.round(s.shadowWidth * 0.35))));
     }

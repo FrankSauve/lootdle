@@ -1,41 +1,12 @@
 import { ARENA_HEIGHT, ARENA_WIDTH, DT } from './config.ts';
 import { SRC_WEAPON, applyHitEffects, explode, onEnemyKilled, stormStrike } from './effects.ts';
 import { ENEMY_DEFS, EnemyKind, MAX_ENEMY_RADIUS } from './enemies.ts';
+import { ENEMY_SHOT_RADIUS } from './enemyShots.ts';
 import type { SimState } from './state.ts';
 
 const PLAYER_INVULNERABLE_SECONDS = 0.5;
 const RICOCHET_RANGE = 260;
 const HIT_FLASH_SECONDS = 0.08;
-/** Flankers aim this far to the side of the player until they get close. */
-const FLANK_OFFSET = 140;
-const FLANK_COMMIT_DISTANCE = 180;
-
-/** Moves every enemy toward the player (flankers swing wide first). */
-export function moveEnemies(state: SimState): void {
-  const e = state.enemies;
-  const p = state.player;
-  for (let i = 0; i < e.count; i++) {
-    let dx = p.x - e.x[i]!;
-    let dy = p.y - e.y[i]!;
-    let len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 1e-6) continue;
-
-    if (e.kind[i] === EnemyKind.Flanker && len > FLANK_COMMIT_DISTANCE) {
-      // Perpendicular offset; the side depends on the enemy id so flankers split left and right.
-      const side = e.id[i]! & 1 ? 1 : -1;
-      const tx = p.x + (-dy / len) * side * FLANK_OFFSET;
-      const ty = p.y + (dx / len) * side * FLANK_OFFSET;
-      dx = tx - e.x[i]!;
-      dy = ty - e.y[i]!;
-      len = Math.sqrt(dx * dx + dy * dy) || 1;
-    }
-
-    const step = (e.speed[i]! * DT) / len;
-    e.x[i] = e.x[i]! + dx * step;
-    e.y[i] = e.y[i]! + dy * step;
-  }
-}
-
 /**
  * Pushes overlapping enemies apart so crowds stay readable. Bigger enemies get pushed less.
  * Expects the grid to have been built from current enemy positions.
@@ -157,6 +128,8 @@ export function damageEnemy(
 ): void {
   const e = state.enemies;
   if (e.dead[i]) return;
+  // Armored enemies shrug off part of every direct weapon hit (not explosions, arcs or DOT).
+  if (flash && src === SRC_WEAPON) amount *= ENEMY_DEFS[e.kind[i]! as EnemyKind].armor;
   const dealt = Math.min(amount, e.hp[i]!);
   e.hp[i] = e.hp[i]! - amount;
   if (flash) {
@@ -167,7 +140,7 @@ export function damageEnemy(
   if (e.hp[i]! <= 0) killEnemy(state, i);
 }
 
-function killEnemy(state: SimState, i: number): void {
+export function killEnemy(state: SimState, i: number): void {
   const e = state.enemies;
   e.dead[i] = 1;
   const kind = e.kind[i]! as EnemyKind;
@@ -193,8 +166,19 @@ function killEnemy(state: SimState, i: number): void {
     e.spawn(EnemyKind.Slimelet, x + o, y + o, hpMul * 0.5, dmgMul);
   }
 
+  if (kind === EnemyKind.Bomber) {
+    // Detonates on death: dangerous up close, harmless if shot from afar.
+    const p = state.player;
+    const dx = p.x - x;
+    const dy = p.y - y;
+    if (dx * dx + dy * dy <= BOMB_RADIUS * BOMB_RADIUS) hurtPlayer(state, e.damage[i]!);
+    state.events.push({ type: 'enemyBlast', x, y, radius: BOMB_RADIUS, style: 0 });
+  }
+
   onEnemyKilled(state, x, y, e.poisonT[i]! > 0);
 }
+
+const BOMB_RADIUS = 80;
 
 /** Contact damage from enemies touching the player, with brief invulnerability after each hit. */
 export function updatePlayerContact(state: SimState): void {
@@ -213,17 +197,24 @@ export function updatePlayerContact(state: SimState): void {
     if (e.dead[j]) continue;
     const dx = e.x[j]! - p.x;
     const dy = e.y[j]! - p.y;
+    if (e.kind[j] === EnemyKind.Bomber) continue; // bombers hurt by exploding, not by touching
     const hitDist = p.radius + e.radius[j]!;
     if (dx * dx + dy * dy <= hitDist * hitDist && e.damage[j]! > worst) worst = e.damage[j]!;
   }
   if (worst <= 0) return;
+  hurtPlayer(state, worst);
+}
 
+/** Applies one hit of `damage` to the player: barrier, bastion, thorns, phoenix and invulnerability. */
+export function hurtPlayer(state: SimState, damage: number): void {
+  const p = state.player;
+  if (p.invulnerable > 0 || state.over) return;
   const b = state.build;
   p.invulnerable = PLAYER_INVULNERABLE_SECONDS;
 
   // A ready barrier soaks the whole hit; Bastion halves damage while standing still.
   const still = p.x === p.prevX && p.y === p.prevY;
-  let taken = worst * b.damageTakenMul * (still ? b.bastionMul : 1);
+  let taken = damage * b.damageTakenMul * (still ? b.bastionMul : 1);
   if (b.barrierCooldown > 0 && state.barrierTimer <= 0) {
     state.barrierTimer = b.barrierCooldown;
     state.events.push({ type: 'blocked' });
@@ -247,6 +238,30 @@ export function updatePlayerContact(state: SimState): void {
     p.invulnerable = 2;
     state.events.push({ type: 'revive' });
     explode(state, p.x, p.y, b.phoenixRadius, b.phoenixDamage, 90);
+  }
+}
+
+/** Moves hostile projectiles and applies their hits to the player. */
+export function updateEnemyShots(state: SimState): void {
+  const s = state.enemyShots;
+  const p = state.player;
+  const reach = p.radius + ENEMY_SHOT_RADIUS;
+  for (let i = 0; i < s.count; i++) {
+    s.x[i] = s.x[i]! + s.vx[i]! * DT;
+    s.y[i] = s.y[i]! + s.vy[i]! * DT;
+    s.life[i] = s.life[i]! - DT;
+    const x = s.x[i]!;
+    const y = s.y[i]!;
+    if (s.life[i]! <= 0 || x < -20 || y < -20 || x > ARENA_WIDTH + 20 || y > ARENA_HEIGHT + 20) {
+      s.dead[i] = 1;
+      continue;
+    }
+    const dx = x - p.x;
+    const dy = y - p.y;
+    if (dx * dx + dy * dy <= reach * reach && p.invulnerable <= 0) {
+      s.dead[i] = 1;
+      hurtPlayer(state, s.damage[i]!);
+    }
   }
 }
 

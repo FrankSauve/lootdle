@@ -2,6 +2,7 @@
  * Developer debug menu. Only loaded in the Vite dev server (import.meta.env.DEV), never in a
  * production build. Toggle it with the DEBUG button (bottom-left) or F2.
  */
+import { ENEMY_DEFS } from '../sim/enemies.ts';
 import type { SimState } from '../sim/sim.ts';
 
 export const SPEEDS = [0, 0.1, 0.25, 0.5, 1, 2, 4, 8] as const;
@@ -18,6 +19,8 @@ export interface DebugHost {
   loadPlayerLoot(name: string): void;
   resetLoot(): void;
   killAll(): void;
+  /** Spawns `count` enemies of the given kind near the player. */
+  spawn(kind: number, count: number): void;
 }
 
 export class DebugMenu {
@@ -64,6 +67,11 @@ export class DebugMenu {
         <button type="button" class="debug-load-player">Load loot</button>
       </div>
       <div class="debug-row">
+        <select class="debug-kind"></select>
+        <button type="button" class="debug-spawn">Spawn</button>
+        <button type="button" class="debug-spawn-pack">x10</button>
+      </div>
+      <div class="debug-row">
         <button type="button" class="debug-kill">Kill all enemies</button>
       </div>
       <pre class="debug-info"></pre>
@@ -100,6 +108,15 @@ export class DebugMenu {
     q('.debug-load-player').addEventListener('click', () => {
       if (player.value.trim()) host.loadPlayerLoot(player.value.trim());
     });
+    const kind = q<HTMLSelectElement>('.debug-kind');
+    for (const [id, def] of Object.entries(ENEMY_DEFS)) {
+      const o = document.createElement('option');
+      o.value = id;
+      o.textContent = def.boss ? `${def.name} (boss)` : def.name;
+      kind.appendChild(o);
+    }
+    q('.debug-spawn').addEventListener('click', () => host.spawn(Number(kind.value), 1));
+    q('.debug-spawn-pack').addEventListener('click', () => host.spawn(Number(kind.value), 10));
     q('.debug-kill').addEventListener('click', () => host.killAll());
 
     window.addEventListener('keydown', (e) => {

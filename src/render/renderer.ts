@@ -40,7 +40,20 @@ const KIND_DEBRIS: Record<EnemyKind, readonly number[]> = {
   [EnemyKind.Brute]: [0xd9822b, 0x8a8fa3, 0x5c6070],
   [EnemyKind.Slimelet]: [0x6fd36a, 0x9be895, 0x3f8f3b],
   [EnemyKind.GiantSlime]: [0x3fbf5a, 0x6fd36a, 0xffc94a, 0x2a7a3a],
+  [EnemyKind.Rat]: [0x9a8f9e, 0xf0a0b0, 0x6b6270],
+  [EnemyKind.Boar]: [0x8a5a2b, 0x5e3a1a, 0xf3ecff],
+  [EnemyKind.Spitter]: [0x5fbf4a, 0x3a8a34, 0xffe14a],
+  [EnemyKind.Bomber]: [0x4a4660, 0xff8a2b, 0xffe14a],
+  [EnemyKind.Knight]: [0xb8bdd0, 0x7d8299, 0x3a6fd9],
+  [EnemyKind.Shaman]: [0x7a3fc2, 0x52288f, 0x9ff59a],
+  [EnemyKind.Juggernaut]: [0x8a8fa3, 0x5c6070, 0xd9822b, 0xff4d6d],
+  [EnemyKind.HiveQueen]: [0xffc94a, 0xc48a1e, 0xcfe8ff, 0x3a2a1a],
+  [EnemyKind.Lich]: [0xe9e4d4, 0x4b2a7a, 0x7dffb0, 0xffc94a],
 };
+/** Rings for enemy abilities, by style: bomb, heal, slam, spell. */
+const BLAST_COLORS = [0xff4d4d, 0x7dff9a, 0xffc94a, 0xb06bff];
+const SHOT_COLORS = [0xff4d6d, 0xffd0d8];
+const WINDUP_TINT = 0xff7070;
 
 /** Projectiles up to this radius are drawn as thrown blades/arrows, bigger ones as orbs. */
 const BLADE_MAX_RADIUS = 8;
@@ -64,7 +77,7 @@ interface Ring {
 }
 
 /** Floating-number colors by damage source (weapon, explosion, lightning). */
-const HIT_COLORS = [0xffffff, 0xffc94a, 0xfff06a];
+const HIT_COLORS = [0xffffff, 0xffc94a, 0xfff06a, 0xff4d6d];
 const VORTEX_COLORS = [0xb06bff, 0x6a3fc2, 0xe6d0ff];
 const REVIVE_COLORS = [0xffc94a, 0xfff6c0, 0xff8a2b];
 /** At most this many floating numbers per rendered frame, so crowds stay readable. */
@@ -154,6 +167,15 @@ export class GameRenderer {
       [EnemyKind.Brute]: animated(art.brute),
       [EnemyKind.Slimelet]: animated(art.slimelet),
       [EnemyKind.GiantSlime]: animated(art.giantSlime),
+      [EnemyKind.Rat]: animated(art.rat),
+      [EnemyKind.Boar]: animated(art.boar),
+      [EnemyKind.Spitter]: animated(art.spitter),
+      [EnemyKind.Bomber]: animated(art.bomber),
+      [EnemyKind.Knight]: animated(art.knight),
+      [EnemyKind.Shaman]: animated(art.shaman),
+      [EnemyKind.Juggernaut]: animated(art.juggernaut),
+      [EnemyKind.HiveQueen]: animated(art.hiveQueen),
+      [EnemyKind.Lich]: animated(art.lich),
     };
     this.torchFrames = art.torch.map(pixelTexture);
     this.knifeTexture = pixelTexture(art.knife);
@@ -247,6 +269,11 @@ export class GameRenderer {
           this.particles.burst(ev.x, ev.y, EXPLOSION_COLORS, 6 + Math.round(ev.radius / 10), 240);
           this.rings.push({ x: ev.x, y: ev.y, radius: ev.radius, life: 0.22, maxLife: 0.22, color: 0xffc94a });
           this.shake = Math.max(this.shake, Math.min(5, 1 + ev.radius / 60));
+          break;
+        case 'enemyBlast':
+          this.particles.burst(ev.x, ev.y, [BLAST_COLORS[ev.style] ?? 0xffffff, 0xffffff], 10, 180);
+          this.rings.push({ x: ev.x, y: ev.y, radius: ev.radius, life: 0.3, maxLife: 0.3, color: BLAST_COLORS[ev.style] ?? 0xffffff });
+          if (ev.style !== 1) this.shake = Math.max(this.shake, 3);
           break;
         case 'hit':
           if (this.numberBudget > 0) {
@@ -353,6 +380,10 @@ export class GameRenderer {
       const poisoned = e.poisonT[i]! > 0;
       const burning = e.burnT[i]! > 0;
       s.tint = poisoned && burning ? BOTH_TINT : poisoned ? POISON_TINT : burning ? BURN_TINT : 0xffffff;
+      // Charging enemies flash red while winding up so the attack can be dodged.
+      if (e.mode[i] === 1 && (kind === EnemyKind.Boar || kind === EnemyKind.Juggernaut) && Math.floor(t * 16) % 2 === 0) {
+        s.tint = WINDUP_TINT;
+      }
       if ((poisoned || burning) && Math.random() < frameSeconds * 3) {
         this.particles.burst(x, y - 4, burning ? [0xff6a2b, 0xffc94a] : [0x5fd35f, 0xb6f5b0], 1, 50);
       }
@@ -386,6 +417,7 @@ export class GameRenderer {
     }
 
     this.drawBossBars(state, alpha);
+    this.drawEnemyShots(state, alpha);
     this.drawOrbit(state);
     this.drawEffects(state, frameSeconds);
     this.particles.update(frameSeconds);
@@ -484,6 +516,19 @@ export class GameRenderer {
       const flicker = 0.5 + 0.5 * Math.sin(k * 1.7) * Math.sin(k * 0.6);
       torch.glow.alpha = (this.doom ? 0.4 : 0.28) + flicker * 0.1;
       torch.glow.scale.set(0.95 + flicker * 0.1);
+    }
+  }
+
+  /** Hostile projectiles: glowing red orbs with a pale core. */
+  private drawEnemyShots(state: SimState, alpha: number): void {
+    const g = this.overlay;
+    const s = state.enemyShots;
+    for (let i = 0; i < s.count; i++) {
+      const x = snap(lerp(s.prevX[i]!, s.x[i]!, alpha));
+      const y = snap(lerp(s.prevY[i]!, s.y[i]!, alpha));
+      g.circle(x, y, 7).fill({ color: SHOT_COLORS[0]!, alpha: 0.35 });
+      g.circle(x, y, 5).fill(SHOT_COLORS[0]!);
+      g.circle(x, y, 2.5).fill(SHOT_COLORS[1]!);
     }
   }
 

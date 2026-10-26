@@ -1,6 +1,7 @@
 import type { Build } from './build.ts';
 import type { EnemyKind, EnemyPool } from './enemies.ts';
 import type { SpatialGrid } from './grid.ts';
+import type { EnemyShotPool } from './enemyShots.ts';
 import type { Loadout } from './loot.ts';
 import type { ProjectilePool } from './projectiles.ts';
 import type { Rng } from './rng.ts';
@@ -69,6 +70,8 @@ export type SimEvent =
   | { type: 'vortex'; x: number; y: number; radius: number }
   | { type: 'revive' }
   | { type: 'blocked' }
+  | { type: 'enemyBlast'; x: number; y: number; radius: number; style: number }
+  | { type: 'swarm' }
   | { type: 'doom' }
   | { type: 'playerDied' };
 
@@ -92,6 +95,8 @@ export interface SimState {
   weapon: WeaponState;
   enemies: EnemyPool;
   projectiles: ProjectilePool;
+  /** Hostile projectiles. */
+  enemyShots: EnemyShotPool;
   grid: SpatialGrid;
   /** Scratch buffer for grid queries. */
   nearby: Int32Array;

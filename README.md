@@ -92,3 +92,12 @@ Under `npm run dev` / the Docker dev service, a **DEBUG** button (bottom-left, o
 player immunity, set HP, game speed (paused to 8x), reroll loot, load another player's loot by name,
 back to today's loot, kill all enemies, and a live readout of the current build.
 It is loaded behind `import.meta.env.DEV`, so it is not part of production builds (`prod` profile on :8080).
+
+## Enemies
+
+Regular roster (joins the mix over time): Chaser, Rat packs, Flanker, Spitter (ranged), Bomber (explodes
+when it dies or touches you), Brute, Boar (telegraphed charge), Knight (armored: direct weapon hits do
+~55%, explosions/arcs/DOT ignore armor) and Shaman (heals nearby enemies). A rat swarm hits every 30 s
+from 0:25. A boss arrives every 20 s, cycling Giant Slime, Juggernaut (charges + debris ring), Hive Queen
+(summons rats) and Lich (spell fans and rings); from the fifth boss on, two arrive together.
+The debug menu can spawn any of them.

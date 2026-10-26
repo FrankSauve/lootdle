@@ -6,6 +6,15 @@ export const EnemyKind = {
   Brute: 2,
   Slimelet: 3,
   GiantSlime: 4,
+  Rat: 5,
+  Boar: 6,
+  Spitter: 7,
+  Bomber: 8,
+  Knight: 9,
+  Shaman: 10,
+  Juggernaut: 11,
+  HiveQueen: 12,
+  Lich: 13,
 } as const;
 export type EnemyKind = (typeof EnemyKind)[keyof typeof EnemyKind];
 
@@ -16,14 +25,35 @@ export interface EnemyDef {
   radius: number;
   damage: number; // contact damage per hit
   boss: boolean;
+  /** Direct weapon hits are multiplied by this (1 = none). Explosions, arcs and DOT bypass it. */
+  armor: number;
 }
 
+const def = (
+  name: string,
+  hp: number,
+  speed: number,
+  radius: number,
+  damage: number,
+  boss = false,
+  armor = 1,
+): EnemyDef => ({ name, hp, speed, radius, damage, boss, armor });
+
 export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
-  [EnemyKind.Chaser]: { name: 'Chaser', hp: 18, speed: 85, radius: 12, damage: 8, boss: false },
-  [EnemyKind.Flanker]: { name: 'Flanker', hp: 10, speed: 150, radius: 10, damage: 6, boss: false },
-  [EnemyKind.Brute]: { name: 'Brute', hp: 110, speed: 55, radius: 22, damage: 16, boss: false },
-  [EnemyKind.Slimelet]: { name: 'Slimelet', hp: 40, speed: 95, radius: 14, damage: 8, boss: false },
-  [EnemyKind.GiantSlime]: { name: 'Giant Slime', hp: 450, speed: 60, radius: 48, damage: 25, boss: true },
+  [EnemyKind.Chaser]: def('Chaser', 18, 85, 12, 8),
+  [EnemyKind.Flanker]: def('Flanker', 10, 150, 10, 6),
+  [EnemyKind.Brute]: def('Brute', 110, 55, 22, 16),
+  [EnemyKind.Slimelet]: def('Slimelet', 40, 95, 14, 8),
+  [EnemyKind.GiantSlime]: def('Giant Slime', 550, 60, 48, 25, true),
+  [EnemyKind.Rat]: def('Rat', 7, 175, 8, 5),
+  [EnemyKind.Boar]: def('Boar', 75, 70, 17, 18),
+  [EnemyKind.Spitter]: def('Spitter', 26, 70, 11, 6),
+  [EnemyKind.Bomber]: def('Bomber', 16, 125, 11, 22),
+  [EnemyKind.Knight]: def('Knight', 150, 62, 18, 14, false, 0.55),
+  [EnemyKind.Shaman]: def('Shaman', 42, 65, 12, 5),
+  [EnemyKind.Juggernaut]: def('Juggernaut', 800, 50, 40, 30, true, 0.7),
+  [EnemyKind.HiveQueen]: def('Hive Queen', 650, 45, 34, 22, true),
+  [EnemyKind.Lich]: def('Lich', 700, 60, 28, 24, true),
 };
 
 /** Largest radius of any enemy; used to pad spatial queries. */
@@ -58,6 +88,11 @@ export class EnemyPool {
   readonly poisonDps: Float64Array;
   readonly burnT: Float64Array;
   readonly burnDps: Float64Array;
+  /** Behavior state: a countdown, a mode (0 normal, 1 winding up, 2 charging) and a locked direction. */
+  readonly timer: Float64Array;
+  readonly mode: Uint8Array;
+  readonly dirX: Float64Array;
+  readonly dirY: Float64Array;
 
   constructor(capacity = MAX_ENEMIES) {
     this.capacity = capacity;
@@ -78,6 +113,10 @@ export class EnemyPool {
     this.poisonDps = new Float64Array(capacity);
     this.burnT = new Float64Array(capacity);
     this.burnDps = new Float64Array(capacity);
+    this.timer = new Float64Array(capacity);
+    this.mode = new Uint8Array(capacity);
+    this.dirX = new Float64Array(capacity);
+    this.dirY = new Float64Array(capacity);
   }
 
   /** Adds an enemy and returns its index, or -1 when the pool is full. */
@@ -96,6 +135,10 @@ export class EnemyPool {
     this.damage[i] = def.damage * damageMul;
     this.flash[i] = 0;
     this.poisonT[i] = this.poisonDps[i] = this.burnT[i] = this.burnDps[i] = 0;
+    // Staggered first action so groups don't all act on the same tick (ids are deterministic).
+    this.timer[i] = 1.2 + (this.id[i]! % 7) * 0.35;
+    this.mode[i] = 0;
+    this.dirX[i] = this.dirY[i] = 0;
     return i;
   }
 
@@ -122,6 +165,10 @@ export class EnemyPool {
         this.poisonDps[w] = this.poisonDps[r]!;
         this.burnT[w] = this.burnT[r]!;
         this.burnDps[w] = this.burnDps[r]!;
+        this.timer[w] = this.timer[r]!;
+        this.mode[w] = this.mode[r]!;
+        this.dirX[w] = this.dirX[r]!;
+        this.dirY[w] = this.dirY[r]!;
       }
       w++;
     }

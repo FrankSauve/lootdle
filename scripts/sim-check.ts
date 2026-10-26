@@ -8,6 +8,7 @@
  * 5. Stress: the most effect-heavy loadout we can find still runs inside the frame budget.
  */
 import { compileBuild } from '../src/sim/build.ts';
+import { ENEMY_DEFS, EnemyKind } from '../src/sim/enemies.ts';
 import { RARITY_NAMES, SIGNATURES, SYNERGIES } from '../src/sim/items.ts';
 import type { SignatureId, SynergyId } from '../src/sim/items.ts';
 import { createRng } from '../src/sim/rng.ts';
@@ -226,6 +227,41 @@ for (const key of everything) {
   }
 }
 console.log(`Signatures and synergies: all ${everything.length} rolled and ran cleanly in god mode`);
+
+// Every enemy kind (bosses included) is spawned next to a god-mode player and must behave:
+// finite positions, no pool overflow, and the shooters/summoners actually act.
+{
+  const names = Object.keys(ENEMY_DEFS).map(Number) as EnemyKind[];
+  for (const kind of names) {
+    const sim = createSim({ worldSeed: WORLD_SEED, playerSeed: 7, godMode: true });
+    const mul = 3;
+    for (let k = 0; k < 3; k++) sim.enemies.spawn(kind, 1000 + k * 20, 450 + k * 30, mul, mul);
+    let shots = 0;
+    let spawned = 0;
+    let blasts = 0;
+    for (let t = 0; t < 20 * TICK_RATE; t++) {
+      const before = sim.enemies.count;
+      stepSim(sim, { x: Math.sin(t / 90) > 0 ? 1 : -1, y: 0 });
+      shots = Math.max(shots, sim.enemyShots.count);
+      spawned = Math.max(spawned, sim.enemies.count - before);
+      for (const ev of sim.events) if (ev.type === 'enemyBlast') blasts++;
+    }
+    const e = sim.enemies;
+    let finite = true;
+    for (let i = 0; i < e.count; i++) if (!Number.isFinite(e.x[i]!) || !Number.isFinite(e.y[i]!)) finite = false;
+    if (!finite) {
+      console.log(`${ENEMY_DEFS[kind].name}: non-finite position`);
+      failed = true;
+    }
+    const acts = [EnemyKind.Spitter, EnemyKind.Lich, EnemyKind.Juggernaut].includes(kind) && shots === 0;
+    if (acts) {
+      console.log(`${ENEMY_DEFS[kind].name}: never fired a shot`);
+      failed = true;
+    }
+    console.log(`  ${ENEMY_DEFS[kind].name.padEnd(12)} max shots ${shots}, max spawned/tick ${spawned}, blasts ${blasts}`);
+  }
+  console.log(`Enemy roster: all ${names.length} kinds ran cleanly`);
+}
 
 function correlation(pts: { loot: number; survived: number }[]): number {
   const n = pts.length;

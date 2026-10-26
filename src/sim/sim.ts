@@ -10,7 +10,7 @@
  */
 import {
   updateFlashes,
-  moveEnemies,
+  updateEnemyShots,
   separateEnemies,
   updatePlayerContact,
   updateProjectiles,
@@ -19,7 +19,9 @@ import { ARENA_HEIGHT, ARENA_WIDTH, DT, GRID_CELL_SIZE, MAX_ENEMIES } from './co
 import { compileBuild } from './build.ts';
 import { updateDirector } from './director.ts';
 import { tickAuras, tickBuild, tickStatuses } from './effects.ts';
+import { updateEnemyAbilities, moveEnemies } from './enemyAI.ts';
 import { EnemyPool } from './enemies.ts';
+import { EnemyShotPool } from './enemyShots.ts';
 import { SpatialGrid } from './grid.ts';
 import { generateLoadout } from './loot.ts';
 import type { Loadout } from './loot.ts';
@@ -69,6 +71,7 @@ export function createSim(options: SimOptions): SimState {
     weapon: createWeapon(build, loadout.weapon.name),
     enemies: new EnemyPool(),
     projectiles: new ProjectilePool(),
+    enemyShots: new EnemyShotPool(),
     grid: new SpatialGrid(ARENA_WIDTH, ARENA_HEIGHT, GRID_CELL_SIZE, MAX_ENEMIES),
     nearby: new Int32Array(MAX_ENEMIES),
     shots: 0,
@@ -114,16 +117,19 @@ export function stepSim(state: SimState, input: MoveInput): void {
   const e = state.enemies;
   state.grid.build(e.x, e.y, e.count);
   separateEnemies(state);
+  updateEnemyAbilities(state);
 
   updateWeapon(state);
   tickAuras(state);
   updateProjectiles(state);
   tickStatuses(state);
   updatePlayerContact(state);
+  updateEnemyShots(state);
   updateFlashes(state);
 
   e.compact();
   state.projectiles.compact();
+  state.enemyShots.compact();
 
   state.tick++;
 
@@ -145,6 +151,9 @@ function savePreviousPositions(state: SimState): void {
   const pr = state.projectiles;
   pr.prevX.set(pr.x.subarray(0, pr.count));
   pr.prevY.set(pr.y.subarray(0, pr.count));
+  const es = state.enemyShots;
+  es.prevX.set(es.x.subarray(0, es.count));
+  es.prevY.set(es.y.subarray(0, es.count));
 }
 
 function movePlayer(state: SimState, input: MoveInput): void {

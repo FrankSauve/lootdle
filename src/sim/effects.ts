@@ -28,6 +28,7 @@ const FLAG_HEAL = 4;
 export const SRC_WEAPON = 0;
 export const SRC_EXPLOSION = 1;
 export const SRC_ZAP = 2;
+export const SRC_EXECUTE = 3;
 
 const STORM_WARD_DAMAGE = 45;
 const STORM_WARD_TARGETS = 5;
@@ -151,7 +152,7 @@ export function applyHitEffects(state: SimState, j: number, dirX: number, dirY: 
 
   // Executioner: finish off weakened enemies (not bosses).
   if (b.execute > 0 && !e.dead[j] && e.radius[j]! <= BOSS_RADIUS && e.hp[j]! < e.maxHp[j]! * b.execute) {
-    damageEnemy(state, j, e.hp[j]! + 1, true, SRC_WEAPON);
+    damageEnemy(state, j, e.hp[j]! + 1, true, SRC_EXECUTE);
   }
 
   const x = e.x[j]!;

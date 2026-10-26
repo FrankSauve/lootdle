@@ -10,7 +10,7 @@ import { ENEMY_DEFS, EnemyKind } from './enemies.ts';
 import type { SimState } from './state.ts';
 
 /**
- * The spawn director: regular waves, a boss every 20 seconds, and the Doom transition at 2:00.
+ * The spawn director: regular waves, rat swarms, a boss every 20 seconds, and the Doom transition at 2:00.
  * Every formula here is a function of time only, so all players face the same schedule.
  *
  * It always consumes the same number of worldRng values per spawn regardless of where the player
@@ -27,24 +27,37 @@ const SAFE_SPAWN_DISTANCE = 300;
 
 /** Regular enemies per second at time t (seconds). */
 export function spawnRate(t: number): number {
-  let rate = 1.2 + 0.05 * t;
-  if (t >= DOOM_SECONDS) rate += 1.5 + 0.08 * (t - DOOM_SECONDS);
+  let rate = 2.0 + 0.09 * t;
+  if (t >= DOOM_SECONDS) rate += 2 + 0.1 * (t - DOOM_SECONDS);
   return rate;
 }
 
 /** Enemy HP multiplier at time t. */
 export function hpMultiplier(t: number): number {
-  let m = 1 + (0.6 * t) / 60;
-  if (t >= DOOM_SECONDS) m += (0.9 * (t - DOOM_SECONDS)) / 60;
+  let m = 1 + (1.0 * t) / 60;
+  if (t >= DOOM_SECONDS) m += (1.3 * (t - DOOM_SECONDS)) / 60;
   return m;
 }
 
 /** Enemy contact-damage multiplier at time t. */
 export function damageMultiplier(t: number): number {
-  let m = 1 + (0.25 * t) / 60;
-  if (t >= DOOM_SECONDS) m += 0.5 + (0.3 * (t - DOOM_SECONDS)) / 60;
+  let m = 1 + (0.35 * t) / 60;
+  if (t >= DOOM_SECONDS) m += 0.6 + (0.4 * (t - DOOM_SECONDS)) / 60;
   return m;
 }
+
+/** A swarm of rats floods in from every side every 30 seconds, starting at 0:25. */
+const SWARM_FIRST_TICK = 25 * TICK_RATE;
+const SWARM_INTERVAL_TICKS = 30 * TICK_RATE;
+
+/** Bosses cycle through this list; from the fifth boss on, two arrive at once. */
+const BOSS_ORDER: readonly EnemyKind[] = [
+  EnemyKind.GiantSlime,
+  EnemyKind.Juggernaut,
+  EnemyKind.HiveQueen,
+  EnemyKind.Lich,
+];
+const DOUBLE_BOSS_FROM = 5;
 
 export function updateDirector(state: SimState): void {
   const tick = state.tick;
@@ -55,7 +68,8 @@ export function updateDirector(state: SimState): void {
     state.events.push({ type: 'doom' });
   }
 
-  if (tick > 0 && tick % BOSS_INTERVAL_TICKS === 0) spawnBoss(state, t);
+  if (tick > 0 && tick % BOSS_INTERVAL_TICKS === 0) spawnBossWave(state, t, tick / BOSS_INTERVAL_TICKS);
+  if (tick >= SWARM_FIRST_TICK && (tick - SWARM_FIRST_TICK) % SWARM_INTERVAL_TICKS === 0) spawnSwarm(state, t);
 
   state.spawnBudget += spawnRate(t) * DT;
   while (state.spawnBudget >= 1) {
@@ -64,11 +78,39 @@ export function updateDirector(state: SimState): void {
   }
 }
 
+/**
+ * The regular roster: each kind joins the mix at `from` seconds with a relative `weight`.
+ * Tougher kinds get more common once Doom starts.
+ */
+interface RosterEntry {
+  kind: EnemyKind;
+  from: number;
+  weight: number;
+  doomWeight: number;
+}
+const ROSTER: readonly RosterEntry[] = [
+  { kind: EnemyKind.Chaser, from: 0, weight: 10, doomWeight: 6 },
+  { kind: EnemyKind.Rat, from: 8, weight: 3, doomWeight: 4 },
+  { kind: EnemyKind.Flanker, from: 15, weight: 4, doomWeight: 4 },
+  { kind: EnemyKind.Spitter, from: 25, weight: 3, doomWeight: 4 },
+  { kind: EnemyKind.Bomber, from: 35, weight: 2.5, doomWeight: 3 },
+  { kind: EnemyKind.Brute, from: 40, weight: 2, doomWeight: 3.5 },
+  { kind: EnemyKind.Boar, from: 50, weight: 2.5, doomWeight: 3.5 },
+  { kind: EnemyKind.Knight, from: 65, weight: 2, doomWeight: 3.5 },
+  { kind: EnemyKind.Shaman, from: 80, weight: 1.2, doomWeight: 2 },
+];
+/** Rats arrive in packs of this size (one spawn "ticket" pays for all of them). */
+const RAT_PACK = 5;
+
 function pickRegularKind(roll: number, t: number, doom: boolean): EnemyKind {
-  const bruteChance = doom ? 0.15 : t >= 60 ? 0.08 : 0;
-  const flankerChance = t >= 30 ? 0.25 : 0;
-  if (roll < bruteChance) return EnemyKind.Brute;
-  if (roll < bruteChance + flankerChance) return EnemyKind.Flanker;
+  let total = 0;
+  for (const r of ROSTER) if (t >= r.from) total += doom ? r.doomWeight : r.weight;
+  let x = roll * total;
+  for (const r of ROSTER) {
+    if (t < r.from) continue;
+    x -= doom ? r.doomWeight : r.weight;
+    if (x < 0) return r.kind;
+  }
   return EnemyKind.Chaser;
 }
 
@@ -93,38 +135,68 @@ function spawnRegular(state: SimState, t: number): void {
     y = ARENA_HEIGHT - y;
   }
 
-  state.enemies.spawn(kind, x, y, hpMultiplier(t), damageMultiplier(t));
+  const hpMul = hpMultiplier(t);
+  const dmgMul = damageMultiplier(t);
+  if (kind === EnemyKind.Rat) {
+    // A tight pack: offset sideways along the edge the pack came from.
+    const horizontal = side === 0 || side === 2;
+    for (let k = 0; k < RAT_PACK; k++) {
+      const o = (k - (RAT_PACK - 1) / 2) * 16;
+      state.enemies.spawn(kind, horizontal ? clampTo(x + o, r, ARENA_WIDTH - r) : x, horizontal ? y : clampTo(y + o, r, ARENA_HEIGHT - r), hpMul, dmgMul);
+    }
+    state.spawnBudget -= RAT_PACK - 1;
+    return;
+  }
+  state.enemies.spawn(kind, x, y, hpMul, dmgMul);
 }
 
-function spawnBoss(state: SimState, t: number): void {
+/** Rats pour in along all four edges at once. */
+function spawnSwarm(state: SimState, t: number): void {
+  state.events.push({ type: 'swarm' });
+  const perSide = 6 + Math.floor(t / 15);
+  const r = ENEMY_DEFS[EnemyKind.Rat].radius;
+  const hpMul = hpMultiplier(t);
+  const dmgMul = damageMultiplier(t);
+  for (let side = 0; side < 4; side++) {
+    for (let k = 0; k < perSide; k++) {
+      if (state.enemies.count >= REGULAR_ENEMY_CAP) return;
+      const { x, y } = edgePoint(side, (k + 0.5) / perSide, r);
+      state.enemies.spawn(EnemyKind.Rat, x, y, hpMul, dmgMul);
+    }
+  }
+}
+
+function spawnBossWave(state: SimState, t: number, wave: number): void {
+  const count = wave >= DOUBLE_BOSS_FROM ? 2 : 1;
+  for (let k = 0; k < count; k++) {
+    const kind = BOSS_ORDER[(wave - 1 + k * 2) % BOSS_ORDER.length]!;
+    spawnBoss(state, t, wave, kind, k);
+  }
+}
+
+function spawnBoss(state: SimState, t: number, wave: number, kind: EnemyKind, rank: number): void {
   const number = ++state.bossesSpawned;
-  const kind = EnemyKind.GiantSlime;
   const def = ENEMY_DEFS[kind];
   const r = def.radius;
 
-  // Enter from the edge midpoint farthest from the player.
+  // Enter from the edge midpoint farthest from the player (the second boss takes the next farthest).
   const p = state.player;
   const candidates = [
     { x: ARENA_WIDTH / 2, y: r },
     { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT - r },
     { x: r, y: ARENA_HEIGHT / 2 },
     { x: ARENA_WIDTH - r, y: ARENA_HEIGHT / 2 },
-  ];
-  let best = candidates[0]!;
-  let bestDist = -1;
-  for (const c of candidates) {
-    const dx = c.x - p.x;
-    const dy = c.y - p.y;
-    const d = dx * dx + dy * dy;
-    if (d > bestDist) {
-      bestDist = d;
-      best = c;
-    }
-  }
+  ].map((c) => ({ c, d: (c.x - p.x) * (c.x - p.x) + (c.y - p.y) * (c.y - p.y) }));
+  candidates.sort((a, b) => b.d - a.d);
+  const best = candidates[rank % candidates.length]!.c;
 
-  const hpMul = (1 + 0.6 * (number - 1)) * (state.doom ? 1.4 : 1);
+  const hpMul = (1 + 0.8 * (wave - 1)) * (state.doom ? 1.4 : 1);
   state.enemies.spawn(kind, best.x, best.y, hpMul, damageMultiplier(t));
   state.events.push({ type: 'bossSpawned', number, name: def.name });
+}
+
+function clampTo(v: number, min: number, max: number): number {
+  return v < min ? min : v > max ? max : v;
 }
 
 /** A point on the given arena side (0 top, 1 right, 2 bottom, 3 left), inset by radius r. */
