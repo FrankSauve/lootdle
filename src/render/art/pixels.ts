@@ -94,3 +94,36 @@ export function shade(rgb: number, f: number): number {
   const ch = (v: number) => Math.max(0, Math.min(255, Math.round(v * f)));
   return (ch((rgb >> 16) & 0xff) << 16) | (ch((rgb >> 8) & 0xff) << 8) | ch(rgb & 0xff);
 }
+
+/** Scales an image by `factor` with nearest-neighbor sampling (e.g. 1.5 for a bigger hero). */
+export function scaleNearest(src: PixelImage, factor: number): PixelImage {
+  const w = Math.round(src.width * factor);
+  const h = Math.round(src.height * factor);
+  const out = createImage(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const sx = Math.min(src.width - 1, Math.floor(x / factor));
+      const sy = Math.min(src.height - 1, Math.floor(y / factor));
+      const a = getAlpha(src, sx, sy);
+      if (a > 0) setPixel(out, x, y, getRgb(src, sx, sy), a);
+    }
+  }
+  return out;
+}
+
+/** Adds a one-pixel outline of `rgb` around the opaque pixels, growing the canvas by 1 on each side. */
+export function addOutline(src: PixelImage, rgb: number): PixelImage {
+  const out = createImage(src.width + 2, src.height + 2);
+  for (let y = 0; y < out.height; y++) {
+    for (let x = 0; x < out.width; x++) {
+      const sx = x - 1;
+      const sy = y - 1;
+      if (getAlpha(src, sx, sy)) {
+        setPixel(out, x, y, getRgb(src, sx, sy));
+      } else if (getAlpha(src, sx - 1, sy) || getAlpha(src, sx + 1, sy) || getAlpha(src, sx, sy - 1) || getAlpha(src, sx, sy + 1)) {
+        setPixel(out, x, y, rgb);
+      }
+    }
+  }
+  return out;
+}

@@ -118,6 +118,8 @@ export class GameRenderer {
   private readonly overlay = new Graphics();
   private readonly player: Sprite;
   private readonly playerShadow: Sprite;
+  private readonly playerHalo: Sprite;
+  private readonly playerRing = new Graphics();
   private readonly particles: Particles;
   private readonly torches: { flame: Sprite; glow: Sprite; phase: number }[] = [];
 
@@ -210,6 +212,14 @@ export class GameRenderer {
     this.playerShadow = this.makeSprite(this.playerArt.shadow);
     this.playerShadow.alpha = 0.35;
     this.shadowLayer.addChild(this.playerShadow);
+    // A soft golden halo and a ground ring make the hero easy to spot in a crowd.
+    this.playerHalo = new Sprite(glowTexture(96));
+    this.playerHalo.anchor.set(0.5);
+    this.playerHalo.blendMode = 'add';
+    this.playerHalo.tint = 0xffd36a;
+    this.playerHalo.scale.set(150 / 96);
+    this.shadowLayer.addChildAt(this.playerHalo, 0);
+    this.shadowLayer.addChildAt(this.playerRing, 1);
     this.player = this.makeSprite(this.playerArt.frames[0]!);
     this.particles = new Particles(pixelTexture(art.pixel), PX);
     this.numbers = new NumberPopups(digitImages().map(pixelTexture), PX);
@@ -351,6 +361,12 @@ export class GameRenderer {
     this.player.scale.set(PX * this.facing, PX);
     this.player.visible = !(p.invulnerable > 0 && Math.floor(p.invulnerable * 20) % 2 === 0);
     this.playerShadow.position.set(px, py + this.playerArt.shadowOffset);
+    this.playerHalo.position.set(px, py);
+    this.playerHalo.alpha = 0.5 + 0.12 * Math.sin(t * 4);
+    this.playerRing
+      .clear()
+      .ellipse(px, py + this.playerArt.shadowOffset - 2, 22, 8)
+      .stroke({ width: PX, color: 0xffe14a, alpha: 0.75 });
 
     // Enemies and their shadows.
     const e = state.enemies;

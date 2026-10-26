@@ -2,7 +2,7 @@
  * All character art, drawn in code: hand-placed pixels (ASCII maps) for most sprites and small
  * procedural generators for slimes, shadows and glows. One art pixel = 2 simulation units.
  */
-import { createImage, fillRect, fromAscii, getAlpha, getRgb, setPixel, shade } from './pixels.ts';
+import { addOutline, createImage, fillRect, fromAscii, getAlpha, getRgb, scaleNearest, setPixel, shade } from './pixels.ts';
 import type { PixelImage } from './pixels.ts';
 import { buildEnemyArt } from './enemies.ts';
 
@@ -305,7 +305,11 @@ export function buildArtCatalog(): ArtCatalog {
 
   const more = buildEnemyArt();
   const art: Omit<ArtCatalog, 'shadows'> = {
-    player: { frames: [fromAscii('knight', KNIGHT, KNIGHT_PALETTE)], shadowWidth: 10 },
+    // The hero is drawn 1.5x bigger than its hitbox with a bright outline so it never gets lost.
+    player: {
+      frames: [addOutline(scaleNearest(fromAscii('knight', KNIGHT, KNIGHT_PALETTE), 1.5), 0xfff6c0)],
+      shadowWidth: 18,
+    },
     chaser: { frames: [fromAscii('imp', IMP, IMP_PALETTE)], shadowWidth: 9 },
     flanker: {
       frames: [fromAscii('bat-up', BAT_UP, BAT_PALETTE), fromAscii('bat-down', BAT_DOWN, BAT_PALETTE)],
