@@ -1,7 +1,7 @@
 import { Application } from 'pixi.js';
 import './style.css';
 import { createKeyboardInput } from './input/keyboard.ts';
-import { GameRenderer } from './render/renderer.ts';
+import { CANVAS_HEIGHT, CANVAS_WIDTH, GameRenderer } from './render/renderer.ts';
 import { hashSeed } from './sim/rng.ts';
 import { DT, createSim, stepSim } from './sim/sim.ts';
 import type { SimState } from './sim/sim.ts';
@@ -16,12 +16,23 @@ async function main() {
   stage.className = 'stage';
   container.appendChild(stage);
 
+  // Render at the low pixel-art resolution; CSS scales the canvas up with crisp pixels.
   const app = new Application();
-  await app.init({ resizeTo: stage, background: '#14101c', antialias: true });
+  await app.init({
+    width: CANVAS_WIDTH,
+    height: CANVAS_HEIGHT,
+    background: '#0b0810',
+    antialias: false,
+    roundPixels: true,
+    resolution: 1,
+  });
   stage.appendChild(app.canvas);
 
   const input = createKeyboardInput();
   const renderer = new GameRenderer(app);
+  const fit = () => renderer.fitCanvas(stage.clientWidth, stage.clientHeight);
+  new ResizeObserver(fit).observe(stage);
+  fit();
 
   // Shared daily schedule (UTC date) + a per-session player seed until accounts/loot exist.
   const today = new Date().toISOString().slice(0, 10);
@@ -65,7 +76,7 @@ async function main() {
         accumulator -= DT;
         renderer.handleEvents(sim.events);
         for (const ev of sim.events) {
-          if (ev.type === 'bossSpawned') hud.showBanner(`👑 ${ev.name} #${ev.number} appears`, 'boss');
+          if (ev.type === 'bossSpawned') hud.showBanner(`${ev.name} #${ev.number} appears`, 'boss');
           else if (ev.type === 'bossDefeated') hud.showBanner(`${ev.name} defeated!`, 'boss', 1400);
           else if (ev.type === 'doom') hud.showBanner('Doom has awakened', 'doom', 3000);
         }

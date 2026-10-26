@@ -1,23 +1,47 @@
-import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Sprite } from 'pixi.js';
+import type { Texture } from 'pixi.js';
 import { ENEMY_DEFS, EnemyKind } from '../sim/enemies.ts';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../sim/sim.ts';
 import type { SimEvent, SimState } from '../sim/sim.ts';
+import { generateDungeon } from './art/dungeon.ts';
+import { silhouette } from './art/pixels.ts';
+import { buildArtCatalog } from './art/sprites.ts';
+import type { SpriteArt } from './art/sprites.ts';
 import { Particles } from './particles.ts';
+import { glowTexture, pixelTexture, vignetteTexture } from './textures.ts';
 
-/** Radius of the shared circle texture; sprites are scaled from it. */
-const CIRCLE_RADIUS = 32;
+/**
+ * The game draws at a low "art" resolution (one art pixel = 2 simulation units) and the canvas is
+ * scaled up with nearest-neighbour filtering, so everything is made of crisp, chunky pixels.
+ */
+const ART_SCALE = 0.5;
+/** World units per art pixel. */
+const PX = 1 / ART_SCALE;
+/** Wall thickness around the arena, in art pixels. */
+const WALL = 16;
+export const CANVAS_WIDTH = ARENA_WIDTH * ART_SCALE + WALL * 2;
+export const CANVAS_HEIGHT = ARENA_HEIGHT * ART_SCALE + WALL * 2;
+const DUNGEON_SEED = 0x10071;
 
-const ENEMY_COLORS: Record<EnemyKind, number> = {
-  [EnemyKind.Chaser]: 0xe5534b,
-  [EnemyKind.Flanker]: 0xb15ee8,
-  [EnemyKind.Brute]: 0xd9822b,
-  [EnemyKind.Slimelet]: 0x7be37b,
-  [EnemyKind.GiantSlime]: 0x3fbf5a,
+interface AnimatedTextures {
+  frames: Texture[];
+  flash: Texture[];
+  shadow: Texture;
+  /** Offset from the entity center to its shadow, in world units. */
+  shadowOffset: number;
+}
+
+const KIND_DEBRIS: Record<EnemyKind, readonly number[]> = {
+  [EnemyKind.Chaser]: [0xe5534b, 0x9e2b33, 0xffe14a],
+  [EnemyKind.Flanker]: [0xb15ee8, 0x6c2f9e],
+  [EnemyKind.Brute]: [0xd9822b, 0x8a8fa3, 0x5c6070],
+  [EnemyKind.Slimelet]: [0x6fd36a, 0x9be895, 0x3f8f3b],
+  [EnemyKind.GiantSlime]: [0x3fbf5a, 0x6fd36a, 0xffc94a, 0x2a7a3a],
 };
-const PLAYER_COLOR = 0xffc94a;
-const KNIFE_COLOR = 0xdfe8ff;
-const ARENA_COLOR = 0x1d1728;
-const DOOM_ARENA_TINT = 0xff9a9a;
+
+const TORCH_GLOW = 0xff9a3c;
+const DOOM_TORCH_GLOW = 0xff3b3b;
+const DOOM_TINT = 0xffb0b0;
 
 /**
  * Draws the simulation. It only reads SimState (positions are interpolated between the last two
@@ -26,57 +50,118 @@ const DOOM_ARENA_TINT = 0xff9a9a;
  */
 export class GameRenderer {
   private readonly app: Application;
+  /** Everything that shakes. */
+  private readonly scene = new Container();
+  /** Simulation space (arena units), positioned inside the walls. */
   private readonly world = new Container();
-  private readonly arena: Graphics;
+  private readonly backdrop: Sprite;
+  private readonly shadowLayer = new Container();
   private readonly enemyLayer = new Container();
   private readonly projectileLayer = new Container();
   private readonly overlay = new Graphics();
   private readonly player: Sprite;
-  private readonly circleTexture: Texture;
-  private readonly knifeTexture: Texture;
+  private readonly playerShadow: Sprite;
   private readonly particles: Particles;
+  private readonly torches: { flame: Sprite; glow: Sprite; phase: number }[] = [];
+
+  private readonly kinds: Record<EnemyKind, AnimatedTextures>;
+  private readonly playerArt: AnimatedTextures;
+  private readonly torchFrames: Texture[];
+  private readonly knifeTexture: Texture;
 
   private readonly enemySprites: Sprite[] = [];
+  private readonly enemyShadows: Sprite[] = [];
   private readonly projectileSprites: Sprite[] = [];
 
-  private scale = 1;
-  private offsetX = 0;
-  private offsetY = 0;
-  private fittedWidth = 0;
-  private fittedHeight = 0;
+  private time = 0;
   private shake = 0;
+  private facing = 1;
+  private doom = false;
 
   constructor(app: Application) {
     this.app = app;
-    this.circleTexture = app.renderer.generateTexture(
-      new Graphics().circle(0, 0, CIRCLE_RADIUS).fill(0xffffff),
-    );
-    this.knifeTexture = app.renderer.generateTexture(
-      new Graphics().roundRect(0, 0, 18, 5, 2).fill(0xffffff),
-    );
+    const art = buildArtCatalog();
 
-    this.arena = new Graphics()
-      .rect(0, 0, ARENA_WIDTH, ARENA_HEIGHT)
-      .fill(ARENA_COLOR)
-      .stroke({ width: 4, color: 0x3a2f52 });
+    const animated = (a: SpriteArt): AnimatedTextures => {
+      const tallest = Math.max(...a.frames.map((f) => f.height));
+      return {
+        frames: a.frames.map(pixelTexture),
+        flash: a.frames.map((f) => pixelTexture(silhouette(f))),
+        shadow: pixelTexture(art.shadows.get(a.shadowWidth)!),
+        shadowOffset: (tallest / 2) * PX,
+      };
+    };
+    this.playerArt = animated(art.player);
+    this.kinds = {
+      [EnemyKind.Chaser]: animated(art.chaser),
+      [EnemyKind.Flanker]: animated(art.flanker),
+      [EnemyKind.Brute]: animated(art.brute),
+      [EnemyKind.Slimelet]: animated(art.slimelet),
+      [EnemyKind.GiantSlime]: animated(art.giantSlime),
+    };
+    this.torchFrames = art.torch.map(pixelTexture);
+    this.knifeTexture = pixelTexture(art.knife);
 
-    this.player = this.makeSprite(this.circleTexture, PLAYER_COLOR);
-    this.particles = new Particles(this.circleTexture, CIRCLE_RADIUS);
+    // Static dungeon backdrop (floor + walls), drawn once.
+    const dungeon = generateDungeon(ARENA_WIDTH * ART_SCALE, ARENA_HEIGHT * ART_SCALE, WALL, DUNGEON_SEED);
+    this.backdrop = new Sprite(pixelTexture(dungeon.image));
+    this.scene.addChild(this.backdrop);
+
+    // Torches with flickering light.
+    const glow = glowTexture(96);
+    const glowLayer = new Container();
+    const torchLayer = new Container();
+    for (const t of dungeon.torches) {
+      const flame = new Sprite(this.torchFrames[0]!);
+      flame.anchor.set(0.5);
+      flame.position.set(Math.round(t.x), Math.round(t.y));
+      const light = new Sprite(glow);
+      light.anchor.set(0.5);
+      light.position.set(t.x, t.y + 4);
+      light.blendMode = 'add';
+      light.tint = TORCH_GLOW;
+      glowLayer.addChild(light);
+      torchLayer.addChild(flame);
+      this.torches.push({ flame, glow: light, phase: Math.random() * 10 });
+    }
+
+    this.world.position.set(WALL, WALL);
+    this.world.scale.set(ART_SCALE);
+
+    this.playerShadow = this.makeSprite(this.playerArt.shadow);
+    this.playerShadow.alpha = 0.35;
+    this.shadowLayer.addChild(this.playerShadow);
+    this.player = this.makeSprite(this.playerArt.frames[0]!);
+    this.particles = new Particles(pixelTexture(art.pixel), PX);
 
     this.world.addChild(
-      this.arena,
-      this.particles.container,
+      this.shadowLayer,
       this.enemyLayer,
-      this.projectileLayer,
       this.player,
+      this.projectileLayer,
+      this.particles.container,
       this.overlay,
     );
-    app.stage.addChild(this.world);
+    this.scene.addChild(glowLayer, this.world, torchLayer);
+
+    const vignette = new Sprite(vignetteTexture(CANVAS_WIDTH, CANVAS_HEIGHT));
+    app.stage.addChild(this.scene, vignette);
+  }
+
+  /** Scales the low-resolution canvas up to fit the given area, using whole-number scales when close. */
+  fitCanvas(availableCssWidth: number, availableCssHeight: number): void {
+    const dpr = window.devicePixelRatio || 1;
+    const fit = Math.min((availableCssWidth * dpr) / CANVAS_WIDTH, (availableCssHeight * dpr) / CANVAS_HEIGHT);
+    const whole = Math.floor(fit);
+    const scale = whole >= 1 && whole / fit >= 0.8 ? whole : fit;
+    const canvas = this.app.canvas;
+    canvas.style.width = `${(CANVAS_WIDTH * scale) / dpr}px`;
+    canvas.style.height = `${(CANVAS_HEIGHT * scale) / dpr}px`;
   }
 
   /** Clears per-run visuals before a new run starts. */
   reset(): void {
-    this.arena.tint = 0xffffff;
+    this.setDoom(false);
     this.particles.clear();
     this.shake = 0;
   }
@@ -86,19 +171,19 @@ export class GameRenderer {
     for (const ev of events) {
       switch (ev.type) {
         case 'kill': {
-          const def = ENEMY_DEFS[ev.kind];
-          this.particles.burst(ev.x, ev.y, ENEMY_COLORS[ev.kind], def.boss ? 40 : 7, def.boss ? 260 : 140);
+          const boss = ENEMY_DEFS[ev.kind].boss;
+          this.particles.burst(ev.x, ev.y, KIND_DEBRIS[ev.kind], boss ? 60 : 8, boss ? 420 : 220);
           break;
         }
         case 'bossDefeated':
-          this.shake = Math.max(this.shake, 12);
+          this.shake = Math.max(this.shake, 5);
           break;
         case 'playerHit':
-          this.shake = Math.max(this.shake, 7);
+          this.shake = Math.max(this.shake, 3);
           break;
         case 'doom':
-          this.arena.tint = DOOM_ARENA_TINT;
-          this.shake = Math.max(this.shake, 16);
+          this.setDoom(true);
+          this.shake = Math.max(this.shake, 7);
           break;
         default:
           break;
@@ -108,36 +193,61 @@ export class GameRenderer {
 
   /**
    * Draws the current state. `alpha` (0..1) is how far we are between the previous tick and the
-   * current one; `frameSeconds` is real time since the last frame (for effects only).
+   * current one; `frameSeconds` is real time since the last frame (for animation and effects).
    */
   render(state: SimState, alpha: number, frameSeconds: number): void {
-    this.fitToScreen();
+    this.time += frameSeconds;
+    const t = this.time;
     this.updateShake(frameSeconds);
+    this.updateTorches();
 
-    // Player (blinks while invulnerable).
+    // Player: faces the way it last moved and bobs while walking; blinks while invulnerable.
     const p = state.player;
-    this.player.position.set(lerp(p.prevX, p.x, alpha), lerp(p.prevY, p.y, alpha));
-    this.player.scale.set(p.radius / CIRCLE_RADIUS);
-    this.player.alpha = p.invulnerable > 0 && Math.floor(p.invulnerable * 20) % 2 === 0 ? 0.35 : 1;
+    const px = lerp(p.prevX, p.x, alpha);
+    const py = lerp(p.prevY, p.y, alpha);
+    const moving = p.x !== p.prevX || p.y !== p.prevY;
+    if (p.x > p.prevX) this.facing = 1;
+    else if (p.x < p.prevX) this.facing = -1;
+    const bob = moving && Math.floor(t * 10) % 2 ? -PX : 0;
+    this.player.position.set(px, py + bob);
+    this.player.scale.set(PX * this.facing, PX);
+    this.player.visible = !(p.invulnerable > 0 && Math.floor(p.invulnerable * 20) % 2 === 0);
+    this.playerShadow.position.set(px, py + this.playerArt.shadowOffset);
 
-    // Enemies.
+    // Enemies and their shadows.
     const e = state.enemies;
-    this.ensureSprites(this.enemySprites, this.enemyLayer, e.count, this.circleTexture);
+    this.ensureSprites(this.enemySprites, this.enemyLayer, e.count, this.playerArt.frames[0]!);
+    this.ensureSprites(this.enemyShadows, this.shadowLayer, e.count, this.playerArt.shadow, 0.35);
     for (let i = 0; i < this.enemySprites.length; i++) {
       const s = this.enemySprites[i]!;
+      const sh = this.enemyShadows[i]!;
       if (i >= e.count) {
-        s.visible = false;
+        s.visible = sh.visible = false;
         continue;
       }
-      s.visible = true;
-      s.position.set(lerp(e.prevX[i]!, e.x[i]!, alpha), lerp(e.prevY[i]!, e.y[i]!, alpha));
-      s.scale.set(e.radius[i]! / CIRCLE_RADIUS);
-      s.tint = e.flash[i]! > 0 ? 0xffffff : ENEMY_COLORS[e.kind[i]! as EnemyKind];
+      const kind = e.kind[i]! as EnemyKind;
+      const tex = this.kinds[kind];
+      const id = e.id[i]!;
+      const x = lerp(e.prevX[i]!, e.x[i]!, alpha);
+      const y = lerp(e.prevY[i]!, e.y[i]!, alpha);
+
+      let frame = 0;
+      let lift = 0;
+      if (kind === EnemyKind.Flanker) frame = Math.floor(t * 8 + id * 0.37) % 2;
+      else if (kind === EnemyKind.Slimelet || kind === EnemyKind.GiantSlime) frame = Math.floor(t * 3 + id * 0.29) % 2;
+      else lift = Math.floor(t * 6 + id * 0.37) % 2 ? -PX : 0;
+
+      s.visible = sh.visible = true;
+      s.texture = (e.flash[i]! > 0 ? tex.flash : tex.frames)[frame]!;
+      s.position.set(x, y + lift);
+      s.scale.set(PX);
+      sh.texture = tex.shadow;
+      sh.position.set(x, y + tex.shadowOffset);
     }
 
     // Projectiles, rotated along their velocity.
     const pr = state.projectiles;
-    this.ensureSprites(this.projectileSprites, this.projectileLayer, pr.count, this.knifeTexture, KNIFE_COLOR);
+    this.ensureSprites(this.projectileSprites, this.projectileLayer, pr.count, this.knifeTexture);
     for (let i = 0; i < this.projectileSprites.length; i++) {
       const s = this.projectileSprites[i]!;
       if (i >= pr.count) {
@@ -153,62 +263,71 @@ export class GameRenderer {
     this.particles.update(frameSeconds);
   }
 
+  private setDoom(doom: boolean): void {
+    this.doom = doom;
+    this.backdrop.tint = doom ? DOOM_TINT : 0xffffff;
+    for (const torch of this.torches) torch.glow.tint = doom ? DOOM_TORCH_GLOW : TORCH_GLOW;
+  }
+
+  private updateTorches(): void {
+    for (const torch of this.torches) {
+      const k = this.time * 7 + torch.phase;
+      torch.flame.texture = this.torchFrames[Math.floor(k) % 2]!;
+      const flicker = 0.5 + 0.5 * Math.sin(k * 1.7) * Math.sin(k * 0.6);
+      torch.glow.alpha = (this.doom ? 0.4 : 0.28) + flicker * 0.1;
+      torch.glow.scale.set(0.95 + flicker * 0.1);
+    }
+  }
+
+  /** Pixel-style HP bars above bosses. */
   private drawBossBars(state: SimState, alpha: number): void {
     const g = this.overlay.clear();
     const e = state.enemies;
     for (let i = 0; i < e.count; i++) {
       if (!ENEMY_DEFS[e.kind[i]! as EnemyKind].boss) continue;
-      const x = lerp(e.prevX[i]!, e.x[i]!, alpha);
-      const y = lerp(e.prevY[i]!, e.y[i]!, alpha);
-      const r = e.radius[i]!;
-      const w = r * 2;
+      const tex = this.kinds[e.kind[i]! as EnemyKind];
+      const x = snap(lerp(e.prevX[i]!, e.x[i]!, alpha));
+      const y = snap(lerp(e.prevY[i]!, e.y[i]!, alpha));
+      const w = snap(e.radius[i]! * 1.6);
+      const top = y - tex.shadowOffset - 8 * PX;
       const frac = Math.max(0, e.hp[i]! / e.maxHp[i]!);
-      g.rect(x - r, y - r - 14, w, 6).fill({ color: 0x000000, alpha: 0.6 });
-      g.rect(x - r, y - r - 14, w * frac, 6).fill(0xff4d6d);
+      g.rect(x - w / 2 - PX, top - PX, w + 2 * PX, 4 * PX).fill(0x0b0810);
+      g.rect(x - w / 2, top, w, 2 * PX).fill(0x5a1a2a);
+      g.rect(x - w / 2, top, snap(w * frac), 2 * PX).fill(0xff4d6d);
     }
   }
 
-  private ensureSprites(
-    pool: Sprite[],
-    layer: Container,
-    needed: number,
-    texture: Texture,
-    tint = 0xffffff,
-  ): void {
+  private ensureSprites(pool: Sprite[], layer: Container, needed: number, texture: Texture, alpha = 1): void {
     while (pool.length < needed) {
-      const s = this.makeSprite(texture, tint);
+      const s = this.makeSprite(texture);
+      s.alpha = alpha;
+      s.scale.set(PX);
       pool.push(s);
       layer.addChild(s);
     }
   }
 
-  private makeSprite(texture: Texture, tint: number): Sprite {
+  private makeSprite(texture: Texture): Sprite {
     const s = new Sprite(texture);
     s.anchor.set(0.5);
-    s.tint = tint;
+    s.scale.set(PX);
     return s;
   }
 
-  /** Scales the arena to fit the window, centered. */
-  private fitToScreen(): void {
-    const { width, height } = this.app.screen;
-    if (width === this.fittedWidth && height === this.fittedHeight) return;
-    this.fittedWidth = width;
-    this.fittedHeight = height;
-    this.scale = Math.min(width / ARENA_WIDTH, height / ARENA_HEIGHT) * 0.95;
-    this.offsetX = (width - ARENA_WIDTH * this.scale) / 2;
-    this.offsetY = (height - ARENA_HEIGHT * this.scale) / 2;
-    this.world.scale.set(this.scale);
-  }
-
   private updateShake(frameSeconds: number): void {
-    this.shake = Math.max(0, this.shake - 60 * frameSeconds);
-    const sx = this.shake > 0 ? (Math.random() * 2 - 1) * this.shake * this.scale : 0;
-    const sy = this.shake > 0 ? (Math.random() * 2 - 1) * this.shake * this.scale : 0;
-    this.world.position.set(this.offsetX + sx, this.offsetY + sy);
+    this.shake = Math.max(0, this.shake - 30 * frameSeconds);
+    const amount = Math.ceil(this.shake);
+    const sx = amount > 0 ? Math.round((Math.random() * 2 - 1) * amount) : 0;
+    const sy = amount > 0 ? Math.round((Math.random() * 2 - 1) * amount) : 0;
+    this.scene.position.set(sx, sy);
   }
 }
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+/** Rounds a world coordinate to a whole art pixel. */
+function snap(v: number): number {
+  return Math.round(v / PX) * PX;
 }

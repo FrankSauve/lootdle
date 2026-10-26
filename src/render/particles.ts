@@ -5,27 +5,27 @@ import type { Texture } from 'pixi.js';
 const MAX_PARTICLES = 1500;
 
 /**
- * Purely visual particles (death bursts etc.). Not part of the simulation, so they can use
+ * Purely visual pixel debris (death bursts etc.). Not part of the simulation, so it can use
  * Math.random and real frame time. Sprites are pooled and reused.
  */
 export class Particles {
   readonly container = new Container();
   private readonly texture: Texture;
-  private readonly textureRadius: number;
+  /** World units per art pixel, so particles are whole art pixels in size. */
+  private readonly pixelSize: number;
   private readonly sprites: Sprite[] = [];
   private readonly vx: number[] = [];
   private readonly vy: number[] = [];
   private readonly life: number[] = [];
-  private readonly maxLife: number[] = [];
-  private readonly size: number[] = [];
   private live = 0;
 
-  constructor(texture: Texture, textureRadius: number) {
+  /** @param texture a 1x1 white pixel */
+  constructor(texture: Texture, pixelSize: number) {
     this.texture = texture;
-    this.textureRadius = textureRadius;
+    this.pixelSize = pixelSize;
   }
 
-  burst(x: number, y: number, color: number, count: number, speed: number): void {
+  burst(x: number, y: number, colors: readonly number[], count: number, speed: number): void {
     for (let n = 0; n < count; n++) {
       if (this.live >= MAX_PARTICLES) return;
       const i = this.live++;
@@ -39,11 +39,12 @@ export class Particles {
       const angle = Math.random() * Math.PI * 2;
       const v = speed * (0.35 + Math.random() * 0.65);
       this.vx[i] = Math.cos(angle) * v;
-      this.vy[i] = Math.sin(angle) * v;
-      this.maxLife[i] = this.life[i] = 0.25 + Math.random() * 0.35;
-      this.size[i] = 2 + Math.random() * 3;
+      this.vy[i] = Math.sin(angle) * v - speed * 0.3;
+      this.life[i] = 0.3 + Math.random() * 0.4;
+      s.scale.set(this.pixelSize * (Math.random() < 0.3 ? 2 : 1));
       s.position.set(x, y);
-      s.tint = color;
+      s.tint = colors[Math.floor(Math.random() * colors.length)]!;
+      s.alpha = 1;
       s.visible = true;
     }
   }
@@ -57,13 +58,12 @@ export class Particles {
         continue;
       }
       const s = this.sprites[i]!;
-      const t = this.life[i]! / this.maxLife[i]!;
       s.x += this.vx[i]! * dt;
       s.y += this.vy[i]! * dt;
-      this.vx[i]! *= 0.9;
-      this.vy[i]! *= 0.9;
-      s.alpha = t;
-      s.scale.set((this.size[i]! * (0.5 + 0.5 * t)) / this.textureRadius);
+      this.vx[i]! *= 0.88;
+      this.vy[i] = this.vy[i]! * 0.88 + 600 * dt; // a little gravity so debris settles
+      // Blink out instead of fading, to stay pixel-crisp.
+      if (this.life[i]! < 0.12) s.alpha = Math.floor(this.life[i]! * 50) % 2 ? 1 : 0;
       i++;
     }
   }
@@ -77,15 +77,12 @@ export class Particles {
   private removeAt(i: number): void {
     const last = --this.live;
     const s = this.sprites[i]!;
-    const sl = this.sprites[last]!;
     if (i !== last) {
-      this.sprites[i] = sl;
+      this.sprites[i] = this.sprites[last]!;
       this.sprites[last] = s;
       this.vx[i] = this.vx[last]!;
       this.vy[i] = this.vy[last]!;
       this.life[i] = this.life[last]!;
-      this.maxLife[i] = this.maxLife[last]!;
-      this.size[i] = this.size[last]!;
     }
     s.visible = false;
   }

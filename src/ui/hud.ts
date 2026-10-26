@@ -34,8 +34,8 @@ export class Hud {
       </div>
       <div class="hud-timer">00:00.00</div>
       <div class="hud-counters">
-        <span>💀 <b class="hud-kills">0</b></span>
-        <span>👑 <b class="hud-bosses">0</b></span>
+        <span><span class="hud-label">Kills</span> <b class="hud-kills">0</b></span>
+        <span><span class="hud-label">Bosses</span> <b class="hud-bosses">0</b></span>
       </div>
     `;
     parent.prepend(this.topBar);
