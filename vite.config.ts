@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // Relative asset paths, so the build works from any URL (GitHub Pages serves it under /lootdle/).
+  base: './',
   server: {
     host: true, // listen on 0.0.0.0 so the dev server is reachable from outside the container
     port: 5173,
