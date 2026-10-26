@@ -7,8 +7,12 @@ export function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${s.toFixed(2).padStart(5, '0')}`;
 }
 
-/** DOM overlay: timer, HP, counters, announcement banners, start prompt and results screen. */
+/**
+ * DOM HUD. The top bar (HP, timer, counters) is a layout row above the game canvas so it never
+ * covers the arena; banners, the start prompt and the results screen float over the canvas.
+ */
 export class Hud {
+  private readonly topBar: HTMLElement;
   private readonly root: HTMLElement;
   private readonly timer: HTMLElement;
   private readonly hpFill: HTMLElement;
@@ -22,19 +26,22 @@ export class Hud {
   private last = { time: '', hp: -1, kills: -1, bosses: -1 };
 
   constructor(parent: HTMLElement, onRestart: () => void) {
+    this.topBar = el('div', 'hud-top');
+    this.topBar.innerHTML = `
+      <div class="hud-hp">
+        <div class="hud-hp-bar"><div class="hud-hp-fill"></div></div>
+        <span class="hud-hp-text"></span>
+      </div>
+      <div class="hud-timer">00:00.00</div>
+      <div class="hud-counters">
+        <span>💀 <b class="hud-kills">0</b></span>
+        <span>👑 <b class="hud-bosses">0</b></span>
+      </div>
+    `;
+    parent.prepend(this.topBar);
+
     this.root = el('div', 'hud');
     this.root.innerHTML = `
-      <div class="hud-top">
-        <div class="hud-hp">
-          <div class="hud-hp-bar"><div class="hud-hp-fill"></div></div>
-          <span class="hud-hp-text"></span>
-        </div>
-        <div class="hud-timer">00:00.00</div>
-        <div class="hud-counters">
-          <span>💀 <b class="hud-kills">0</b></span>
-          <span>👑 <b class="hud-bosses">0</b></span>
-        </div>
-      </div>
       <div class="hud-banner"></div>
       <div class="hud-prompt">Move with <b>WASD</b> or <b>arrow keys</b> to begin</div>
       <div class="hud-results" hidden>
@@ -46,11 +53,11 @@ export class Hud {
     `;
     parent.appendChild(this.root);
 
-    this.timer = q(this.root, '.hud-timer');
-    this.hpFill = q(this.root, '.hud-hp-fill');
-    this.hpText = q(this.root, '.hud-hp-text');
-    this.kills = q(this.root, '.hud-kills');
-    this.bosses = q(this.root, '.hud-bosses');
+    this.timer = q(this.topBar, '.hud-timer');
+    this.hpFill = q(this.topBar, '.hud-hp-fill');
+    this.hpText = q(this.topBar, '.hud-hp-text');
+    this.kills = q(this.topBar, '.hud-kills');
+    this.bosses = q(this.topBar, '.hud-bosses');
     this.banner = q(this.root, '.hud-banner');
     this.prompt = q(this.root, '.hud-prompt');
     this.results = q(this.root, '.hud-results');

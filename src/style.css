@@ -20,8 +20,21 @@ body {
 
 #app {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
+}
+
+/* The game canvas fills whatever space the HUD top bar leaves. */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.stage canvas {
+  display: block;
 }
 
 .hud {
@@ -31,6 +44,7 @@ body {
 }
 
 .hud-top {
+  flex: none;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;

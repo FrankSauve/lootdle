@@ -12,9 +12,13 @@ const MAX_FRAME_SECONDS = 0.25;
 
 async function main() {
   const container = document.getElementById('app')!;
+  const stage = document.createElement('div');
+  stage.className = 'stage';
+  container.appendChild(stage);
+
   const app = new Application();
-  await app.init({ resizeTo: container, background: '#14101c', antialias: true });
-  container.appendChild(app.canvas);
+  await app.init({ resizeTo: stage, background: '#14101c', antialias: true });
+  stage.appendChild(app.canvas);
 
   const input = createKeyboardInput();
   const renderer = new GameRenderer(app);
