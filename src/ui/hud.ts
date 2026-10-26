@@ -28,16 +28,19 @@ export class Hud {
   private bannerTimeout = 0;
   private last = { time: '', hp: -1, kills: -1, bosses: -1 };
 
-  constructor(parent: HTMLElement, onRestart: () => void, onOpenSettings: () => void) {
+  /** `playfield` is the element wrapping the game canvas; the HP bar is drawn on top of it. */
+  constructor(parent: HTMLElement, playfield: HTMLElement, onRestart: () => void, onOpenSettings: () => void) {
+    const hp = el('div', 'hud-hp');
+    hp.innerHTML = `
+      <div class="hud-hp-bar"><div class="hud-hp-fill"></div><span class="hud-hp-text"></span></div>
+    `;
+    playfield.appendChild(hp);
+
     this.topBar = el('div', 'hud-top');
     this.topBar.innerHTML = `
-      <div class="hud-hp">
-        <div class="hud-hp-bar"><div class="hud-hp-fill"></div></div>
-        <span class="hud-hp-text"></span>
-      </div>
+      <span class="hud-gear"></span>
       <div class="hud-timer">00:00.00</div>
       <div class="hud-counters">
-        <span class="hud-gear"></span>
         <span><span class="hud-label">Kills</span> <b class="hud-kills">0</b></span>
         <span><span class="hud-label">Bosses</span> <b class="hud-bosses">0</b></span>
         <button type="button" class="hud-settings" title="Settings (Esc)" aria-label="Settings"></button>
@@ -60,8 +63,8 @@ export class Hud {
     parent.appendChild(this.root);
 
     this.timer = q(this.topBar, '.hud-timer');
-    this.hpFill = q(this.topBar, '.hud-hp-fill');
-    this.hpText = q(this.topBar, '.hud-hp-text');
+    this.hpFill = q(hp, '.hud-hp-fill');
+    this.hpText = q(hp, '.hud-hp-text');
     this.kills = q(this.topBar, '.hud-kills');
     this.bosses = q(this.topBar, '.hud-bosses');
     this.banner = q(this.root, '.hud-banner');

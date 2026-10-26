@@ -87,25 +87,46 @@ body {
   text-shadow: 3px 3px 0 var(--ink);
 }
 
+.playfield {
+  position: relative;
+  line-height: 0;
+}
+
+/* The HP bar floats at the bottom middle of the dungeon floor, close to where the eyes are. */
 .hud-hp {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 22px;
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+  width: min(300px, 44%);
+  pointer-events: none;
+  line-height: 1;
 }
 
 .hud-hp-bar {
-  width: min(220px, 28vw);
-  height: 14px;
+  position: relative;
+  height: 22px;
   border: 4px solid var(--ink);
   background: #3a1522;
+  box-shadow: 0 0 0 2px var(--panel-edge);
 }
 
 .hud-hp-fill {
   width: 100%;
   height: 100%;
-  background: linear-gradient(var(--hp-light) 0 3px, var(--hp) 3px 10px, var(--hp-dark) 10px);
+  background: linear-gradient(var(--hp-light) 0 4px, var(--hp) 4px 14px, var(--hp-dark) 14px);
   transition: width 120ms steps(4);
+}
+
+.hud-hp-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  color: #fff;
+  text-shadow: 2px 2px 0 var(--ink);
 }
 
 .hud-counters {

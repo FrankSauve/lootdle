@@ -55,7 +55,11 @@ async function main() {
     roundPixels: true,
     resolution: 1,
   });
-  stage.appendChild(app.canvas);
+  // The wrapper is exactly as big as the canvas, so the HP bar can sit on the dungeon floor.
+  const playfield = document.createElement('div');
+  playfield.className = 'playfield';
+  playfield.appendChild(app.canvas);
+  stage.appendChild(playfield);
 
   const input = createKeyboardInput();
   const renderer = new GameRenderer(app);
@@ -93,7 +97,7 @@ async function main() {
   renderer.setScreenShake(settings.get().screenShake);
   settings.onChange((s) => renderer.setScreenShake(s.screenShake));
 
-  const hud = new Hud(container, () => newRun(), () => settingsWindow.open());
+  const hud = new Hud(container, playfield, () => newRun(), () => settingsWindow.open());
   const lootPanel = new LootPanel(container);
   const settingsWindow = new SettingsWindow(container, settings);
   newRun();
