@@ -22,8 +22,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+      # The lockfile was generated on Windows and lacks Linux's optional native packages (the npm
+      # optional-dependencies bug), so install fresh on the runner instead of using `npm ci`.
+      - run: rm -f package-lock.json && npm install --no-audit --no-fund
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
