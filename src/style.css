@@ -231,6 +231,133 @@ body {
   opacity: 0.7;
 }
 
+/* Settings button and window. */
+.hud-settings {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 3px solid var(--panel-edge);
+  background: var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hud-settings:hover,
+.hud-settings:focus-visible {
+  border-color: var(--gold);
+}
+
+.hud-settings-gear {
+  width: 14px;
+  height: 14px;
+  background: var(--dim);
+  /* A pixel gear, cut out of a square with a stepped mask. */
+  clip-path: polygon(
+    36% 0, 64% 0, 64% 14%, 79% 14%, 79% 21%, 86% 21%, 86% 36%, 100% 36%, 100% 64%, 86% 64%,
+    86% 79%, 79% 79%, 79% 86%, 64% 86%, 64% 100%, 36% 100%, 36% 86%, 21% 86%, 21% 79%, 14% 79%,
+    14% 64%, 0 64%, 0 36%, 14% 36%, 14% 21%, 21% 21%, 21% 14%, 36% 14%
+  );
+}
+
+.hud-settings:hover .hud-settings-gear {
+  background: var(--gold);
+}
+
+.settings-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(11, 8, 16, 0.8);
+}
+
+.settings-panel {
+  width: min(460px, 100%);
+  padding: 20px 22px;
+  background: var(--panel);
+  border: 4px solid var(--panel-edge);
+  box-shadow:
+    0 0 0 4px var(--ink),
+    inset -4px -4px 0 rgba(0, 0, 0, 0.35);
+}
+
+.settings-title {
+  margin: 0 0 16px;
+  font-family: var(--pixel-font);
+  font-size: 14px;
+  font-weight: normal;
+  text-transform: uppercase;
+  text-shadow: 3px 3px 0 var(--ink);
+}
+
+.settings-list {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-label {
+  font-size: 26px;
+}
+
+.settings-desc {
+  color: var(--dim);
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.settings-switch,
+.settings-close {
+  border: 4px solid var(--ink);
+  font-family: var(--pixel-font);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.settings-switch {
+  flex: none;
+  min-width: 78px;
+  padding: 10px 8px;
+  background: #6b6280;
+  font-size: 11px;
+  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.settings-switch.on {
+  background: #62d96b;
+}
+
+.settings-close {
+  padding: 12px 18px;
+  background: var(--gold);
+  font-size: 12px;
+  box-shadow: inset -4px -4px 0 var(--gold-dark);
+}
+
+.settings-close span {
+  opacity: 0.7;
+}
+
+.settings-switch:hover,
+.settings-switch:focus-visible,
+.settings-close:hover,
+.settings-close:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 1px;
+}
+
 /* Top-bar gear icons. */
 .hud-gear {
   display: flex;

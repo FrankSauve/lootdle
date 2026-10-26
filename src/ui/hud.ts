@@ -27,7 +27,7 @@ export class Hud {
   private bannerTimeout = 0;
   private last = { time: '', hp: -1, kills: -1, bosses: -1 };
 
-  constructor(parent: HTMLElement, onRestart: () => void) {
+  constructor(parent: HTMLElement, onRestart: () => void, onOpenSettings: () => void) {
     this.topBar = el('div', 'hud-top');
     this.topBar.innerHTML = `
       <div class="hud-hp">
@@ -39,6 +39,9 @@ export class Hud {
         <span class="hud-gear"></span>
         <span><span class="hud-label">Kills</span> <b class="hud-kills">0</b></span>
         <span><span class="hud-label">Bosses</span> <b class="hud-bosses">0</b></span>
+        <button type="button" class="hud-settings" title="Settings (Esc)" aria-label="Settings">
+          <span class="hud-settings-gear"></span>
+        </button>
       </div>
     `;
     parent.prepend(this.topBar);
@@ -65,6 +68,10 @@ export class Hud {
     this.banner = q(this.root, '.hud-banner');
     this.results = q(this.root, '.hud-results');
     q(this.root, '.hud-restart').addEventListener('click', onRestart);
+    q(this.topBar, '.hud-settings').addEventListener('click', (e) => {
+      onOpenSettings();
+      (e.currentTarget as HTMLElement).blur();
+    });
   }
 
   /** Updates the live HUD; only touches the DOM when a value actually changed. */

@@ -5,8 +5,10 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, GameRenderer } from './render/renderer.ts'
 import { hashSeed } from './sim/rng.ts';
 import { DT, createSim, generateLoadout, stepSim } from './sim/sim.ts';
 import type { SimState } from './sim/sim.ts';
+import { SettingsStore } from './settings.ts';
 import { Hud } from './ui/hud.ts';
 import { LootPanel } from './ui/lootPanel.ts';
+import { SettingsWindow } from './ui/settingsWindow.ts';
 
 /** Never simulate more than this much time in one frame (e.g. after a long hitch). */
 const MAX_FRAME_SECONDS = 0.25;
@@ -78,17 +80,25 @@ async function main() {
     revealUnlockAt = performance.now() + lootPanel.show(loadout, today);
   };
 
-  const hud = new Hud(container, () => newRun());
+  const settings = new SettingsStore();
+  renderer.setScreenShake(settings.get().screenShake);
+  settings.onChange((s) => renderer.setScreenShake(s.screenShake));
+
+  const hud = new Hud(container, () => newRun(), () => settingsWindow.open());
   const lootPanel = new LootPanel(container);
+  const settingsWindow = new SettingsWindow(container, settings);
   newRun();
 
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyR' && sim.over) newRun();
+    if (e.code === 'Escape') settingsWindow.toggle();
+    else if (e.code === 'KeyR' && sim.over && !settingsWindow.isOpen) newRun();
   });
 
   app.ticker.add((ticker) => {
     const frameSeconds = Math.min(ticker.deltaMS / 1000, MAX_FRAME_SECONDS);
-    const move = input.read();
+    // The game is paused while the settings window is open.
+    const paused = settingsWindow.isOpen;
+    const move = paused ? { x: 0, y: 0 } : input.read();
 
     // The run (and the clock) starts on the first movement, once the loot reveal has played.
     if (!started && (move.x !== 0 || move.y !== 0) && performance.now() >= revealUnlockAt) {
@@ -96,7 +106,7 @@ async function main() {
       lootPanel.hide();
     }
 
-    if (started && !sim.over) {
+    if (started && !sim.over && !paused) {
       accumulator += frameSeconds;
       while (accumulator >= DT && !sim.over) {
         stepSim(sim, input.read());
@@ -111,7 +121,7 @@ async function main() {
       }
     }
 
-    renderer.render(sim, sim.over || !started ? 1 : accumulator / DT, frameSeconds);
+    renderer.render(sim, sim.over || !started ? 1 : accumulator / DT, paused ? 0 : frameSeconds);
     hud.update(sim);
 
     if (sim.over && !resultsShown) {

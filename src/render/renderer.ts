@@ -130,6 +130,7 @@ export class GameRenderer {
 
   private time = 0;
   private shake = 0;
+  private shakeEnabled = true;
   private facing = 1;
   private doom = false;
 
@@ -521,7 +522,17 @@ export class GameRenderer {
     return s;
   }
 
+  /** Turns screen shake on or off (a player setting). */
+  setScreenShake(enabled: boolean): void {
+    this.shakeEnabled = enabled;
+    if (!enabled) this.shake = 0;
+  }
+
   private updateShake(frameSeconds: number): void {
+    if (!this.shakeEnabled) {
+      this.scene.position.set(0, 0);
+      return;
+    }
     this.shake = Math.max(0, this.shake - 30 * frameSeconds);
     const amount = Math.ceil(this.shake);
     const sx = amount > 0 ? Math.round((Math.random() * 2 - 1) * amount) : 0;

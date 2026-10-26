@@ -79,3 +79,9 @@ Ward, ...; `SYNERGIES`). Both show up on the loot reveal screen.
 
 Handy previews (today's date seeds them): `?player=p12` (blades + phoenix), `?player=p16`
 (explosions + napalm), `?player=p38` (tesla storm + blood nova).
+
+## Settings
+
+The gear button in the top bar (or `Esc`) opens the settings window and pauses the game. Settings
+are saved in the browser. To add one, extend `Settings`, `DEFAULT_SETTINGS` and `SETTING_DEFS` in
+`src/settings.ts`; the window builds its rows from that list.
