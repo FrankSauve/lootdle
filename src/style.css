@@ -396,6 +396,83 @@ body {
   color: var(--text);
 }
 
+.loot-signature {
+  margin: 6px 0 8px;
+  padding: 6px 6px 7px;
+  color: var(--gold);
+  background: rgba(255, 201, 74, 0.12);
+  border: 2px solid var(--gold-dark);
+  font-size: 21px;
+}
+
+.loot-signature b {
+  font-family: var(--pixel-font);
+  font-size: 9px;
+  font-weight: normal;
+  text-transform: uppercase;
+  line-height: 1.8;
+}
+
+.loot-card.has-signature {
+  animation:
+    loot-reveal 0.45s steps(5) var(--delay, 0s) forwards,
+    sig-shimmer 1.6s steps(2) calc(var(--delay, 0s) + 0.5s) infinite;
+}
+
+@keyframes sig-shimmer {
+  50% {
+    border-color: var(--gold);
+  }
+}
+
+.loot-synergies {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.loot-synergy {
+  padding: 6px 10px;
+  border: 3px solid #4da6ff;
+  background: rgba(77, 166, 255, 0.12);
+  color: var(--text);
+  font-size: 22px;
+  opacity: 0;
+  animation: loot-reveal 0.4s steps(4) var(--delay, 2s) forwards;
+}
+
+.loot-synergy b {
+  margin-right: 6px;
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  font-weight: normal;
+  color: #8cc8ff;
+  text-transform: uppercase;
+}
+
+/* A flash of the best rarity's color when the loot is revealed. */
+.loot-overlay[data-flash='3'],
+.loot-overlay[data-flash='4'] {
+  animation: loot-flash 0.9s steps(6) 1.2s;
+}
+
+.loot-overlay[data-flash='4'] {
+  --flash: rgba(255, 166, 61, 0.55);
+}
+
+.loot-overlay[data-flash='3'] {
+  --flash: rgba(199, 123, 255, 0.4);
+}
+
+@keyframes loot-flash {
+  0% {
+    background: var(--flash);
+  }
+  100% {
+    background: rgba(11, 8, 16, 0.86);
+  }
+}
+
 .loot-drawback {
   margin-top: 8px;
   color: #ff7a8a;
@@ -408,7 +485,7 @@ body {
   color: var(--rarity, var(--gold));
   text-shadow: 3px 3px 0 var(--ink);
   opacity: 0;
-  animation: loot-reveal 0.5s steps(5) 1.7s forwards;
+  animation: loot-reveal 0.5s steps(5) var(--delay, 1.7s) forwards;
 }
 
 .loot-go {
@@ -417,8 +494,8 @@ body {
   color: var(--dim);
   opacity: 0;
   animation:
-    loot-reveal 0.4s steps(4) 2s forwards,
-    blink 1.2s steps(2) 2.4s infinite;
+    loot-reveal 0.4s steps(4) var(--delay, 2s) forwards,
+    blink 1.2s steps(2) calc(var(--delay, 2s) + 0.5s) infinite;
 }
 
 .loot-go b {

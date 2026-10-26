@@ -8,7 +8,8 @@
  * 5. Stress: the most effect-heavy loadout we can find still runs inside the frame budget.
  */
 import { compileBuild } from '../src/sim/build.ts';
-import { RARITY_NAMES } from '../src/sim/items.ts';
+import { RARITY_NAMES, SIGNATURES, SYNERGIES } from '../src/sim/items.ts';
+import type { SignatureId, SynergyId } from '../src/sim/items.ts';
 import { createRng } from '../src/sim/rng.ts';
 import { DT, TICK_RATE, createSim, elapsedSeconds, stepSim } from '../src/sim/sim.ts';
 import { generateLoadout } from '../src/sim/sim.ts';
@@ -196,6 +197,35 @@ if (s.avgTickMs > 4) {
   console.log('Stress loadout is too slow');
   failed = true;
 }
+
+// 6: every signature power and synergy can be rolled, and each one runs cleanly and fast
+const firstSeedWith = new Map<string, number>();
+for (let seed = 1; seed <= 6000; seed++) {
+  const l = generateLoadout(seed);
+  for (const item of [l.weapon, l.armor, l.trinket]) {
+    if (item.signature && !firstSeedWith.has(`sig:${item.signature}`)) firstSeedWith.set(`sig:${item.signature}`, seed);
+  }
+  for (const s of l.synergies) if (!firstSeedWith.has(`syn:${s}`)) firstSeedWith.set(`syn:${s}`, seed);
+}
+const everything = [
+  ...(Object.keys(SIGNATURES) as SignatureId[]).map((id) => `sig:${id}`),
+  ...(Object.keys(SYNERGIES) as SynergyId[]).map((id) => `syn:${id}`),
+];
+for (const key of everything) {
+  const seed = firstSeedWith.get(key);
+  if (seed === undefined) {
+    console.log(`${key}: never rolled in 6000 seeds`);
+    failed = true;
+    continue;
+  }
+  const r = run(120, true, seed);
+  const ok = Number.isFinite(r.stats.damageDealt) && Number.isFinite(r.hash) && r.avgTickMs < 4;
+  if (!ok) {
+    console.log(`${key} (seed ${seed}): FAILED (${r.avgTickMs.toFixed(2)} ms/tick)`);
+    failed = true;
+  }
+}
+console.log(`Signatures and synergies: all ${everything.length} rolled and ran cleanly in god mode`);
 
 function correlation(pts: { loot: number; survived: number }[]): number {
   const n = pts.length;

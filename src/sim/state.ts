@@ -65,6 +65,9 @@ export type SimEvent =
   | { type: 'zap'; x: number; y: number; toX: number; toY: number }
   | { type: 'slash'; x: number; y: number; dx: number; dy: number; radius: number }
   | { type: 'heal'; amount: number }
+  | { type: 'hit'; x: number; y: number; amount: number; src: number }
+  | { type: 'vortex'; x: number; y: number; radius: number }
+  | { type: 'revive' }
   | { type: 'blocked' }
   | { type: 'doom' }
   | { type: 'playerDied' };
@@ -96,6 +99,16 @@ export interface SimState {
   /** Total shots fired (drives "every Nth shot" effects). */
   shots: number;
   killsSinceHeal: number;
+  /** Volleys fired so far (drives "every Nth volley" nova). */
+  volleys: number;
+  phoenixUsed: boolean;
+  vortexTimer: number;
+  /** Direction of the first orbiting blade (unit vector), and the current blade positions. */
+  orbitX: number;
+  orbitY: number;
+  orbitPos: Float64Array;
+  /** Shock arcs so far this tick (capped). */
+  zapsThisTick: number;
   /** Seconds until the barrier can block again (0 = ready). */
   barrierTimer: number;
   /** Explosions so far this tick, and how deeply chained we are: both capped for performance. */

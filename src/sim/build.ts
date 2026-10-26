@@ -2,8 +2,8 @@
  * Turns a loadout into the flat numbers the simulation uses ("the build").
  * Effects from different items stack additively; a few multipliers are capped.
  */
-import { armorById, fx, weaponById } from './items.ts';
-import type { EffectId, Item } from './items.ts';
+import { armorById, fx, sx, weaponById } from './items.ts';
+import type { EffectId, Item, SignatureId } from './items.ts';
 import type { Loadout } from './loot.ts';
 
 const BASE_HP = 100;
@@ -49,6 +49,37 @@ export interface Build {
   thornsRadius: number;
   barrierCooldown: number;
   echoEvery: number;
+  // Signatures
+  ricochet: number;
+  novaEvery: number;
+  /** Enemies below this fraction of max HP are finished off by a hit. */
+  execute: number;
+  berserker: number;
+  orbitBlades: number;
+  orbitDps: number;
+  orbitRadius: number;
+  phoenixHeal: number;
+  phoenixDamage: number;
+  phoenixRadius: number;
+  scorchDps: number;
+  scorchRadius: number;
+  /** Damage multiplier while standing still (1 = no bonus). */
+  bastionMul: number;
+  plagueDamage: number;
+  plagueRadius: number;
+  bloodsplosionHeal: number;
+  teslaJumps: number;
+  vortexEvery: number;
+  vortexDamage: number;
+  vortexPull: number;
+  // Synergies
+  plagueBlast: boolean;
+  napalm: boolean;
+  concussive: boolean;
+  toxicStorm: boolean;
+  plasma: boolean;
+  bloodNova: boolean;
+  stormWard: boolean;
 }
 
 export function compileBuild(loadout: Loadout): Build {
@@ -89,6 +120,33 @@ export function compileBuild(loadout: Loadout): Build {
     thornsRadius: 0,
     barrierCooldown: 0,
     echoEvery: 0,
+    ricochet: 0,
+    novaEvery: 0,
+    execute: 0,
+    berserker: 0,
+    orbitBlades: 0,
+    orbitDps: 0,
+    orbitRadius: 0,
+    phoenixHeal: 0,
+    phoenixDamage: 0,
+    phoenixRadius: 0,
+    scorchDps: 0,
+    scorchRadius: 0,
+    bastionMul: 1,
+    plagueDamage: 0,
+    plagueRadius: 0,
+    bloodsplosionHeal: 0,
+    teslaJumps: 0,
+    vortexEvery: 0,
+    vortexDamage: 0,
+    vortexPull: 0,
+    plagueBlast: loadout.synergies.includes('plagueBlast'),
+    napalm: loadout.synergies.includes('napalm'),
+    concussive: loadout.synergies.includes('concussive'),
+    toxicStorm: loadout.synergies.includes('toxicStorm'),
+    plasma: loadout.synergies.includes('plasma'),
+    bloodNova: loadout.synergies.includes('bloodNova'),
+    stormWard: loadout.synergies.includes('stormWard'),
   };
 
   // Multipliers collected across items, applied at the end.
@@ -96,6 +154,7 @@ export function compileBuild(loadout: Loadout): Build {
 
   for (const item of [loadout.weapon, loadout.armor, loadout.trinket]) {
     for (const e of item.effects) applyEffect(b, m, e, item);
+    if (item.signature) applySignature(b, item.signature, item.power);
     applyQuirk(b, m, item);
   }
 
@@ -194,6 +253,65 @@ function applyEffect(b: Build, m: Multipliers, effect: EffectId, item: Item): vo
       const v = fx.reach(p);
       b.pierce += v.pierce;
       m.range += v.range;
+      break;
+    }
+  }
+}
+
+function applySignature(b: Build, sig: SignatureId, p: number): void {
+  switch (sig) {
+    case 'ricochet':
+      b.ricochet += sx.ricochet(p);
+      break;
+    case 'nova':
+      b.novaEvery = sx.nova(p);
+      break;
+    case 'executioner':
+      b.execute = Math.max(b.execute, sx.execute(p));
+      break;
+    case 'berserker':
+      b.berserker += sx.berserker(p);
+      break;
+    case 'orbit': {
+      const v = sx.orbit(p);
+      b.orbitBlades = v.blades;
+      b.orbitDps = v.dps;
+      b.orbitRadius = v.radius;
+      break;
+    }
+    case 'phoenix': {
+      const v = sx.phoenix(p);
+      b.phoenixHeal = v.heal;
+      b.phoenixDamage = v.damage;
+      b.phoenixRadius = v.radius;
+      break;
+    }
+    case 'scorch': {
+      const v = sx.scorch(p);
+      b.scorchDps += v.dps;
+      b.scorchRadius = Math.max(b.scorchRadius, v.radius);
+      break;
+    }
+    case 'bastion':
+      b.bastionMul = Math.min(b.bastionMul, sx.bastion(p));
+      break;
+    case 'plague': {
+      const v = sx.plague(p);
+      b.plagueDamage += v.damage;
+      b.plagueRadius = Math.max(b.plagueRadius, v.radius);
+      break;
+    }
+    case 'bloodsplosion':
+      b.bloodsplosionHeal += sx.bloodsplosion(p);
+      break;
+    case 'tesla':
+      b.teslaJumps += sx.tesla(p);
+      break;
+    case 'vortex': {
+      const v = sx.vortex(p);
+      b.vortexEvery = v.every;
+      b.vortexDamage = v.damage;
+      b.vortexPull = v.pull;
       break;
     }
   }

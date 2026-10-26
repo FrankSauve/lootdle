@@ -1,5 +1,5 @@
 import { itemIcon } from '../render/art/icons.ts';
-import { RARITY_COLORS, RARITY_NAMES } from '../sim/items.ts';
+import { RARITY_COLORS, RARITY_NAMES, SYNERGIES } from '../sim/items.ts';
 import type { Item } from '../sim/items.ts';
 import { describeItem } from '../sim/loot.ts';
 import type { Loadout } from '../sim/loot.ts';
@@ -31,6 +31,8 @@ export class LootPanel {
   private readonly root: HTMLElement;
   private readonly cards: HTMLElement;
   private readonly build: HTMLElement;
+  private readonly synergies: HTMLElement;
+  private readonly go: HTMLElement;
   private readonly date: HTMLElement;
 
   constructor(parent: HTMLElement) {
@@ -41,6 +43,7 @@ export class LootPanel {
       <div class="loot-panel">
         <div class="loot-head"><span>Today's loot</span> <span class="loot-date"></span></div>
         <div class="loot-cards"></div>
+        <div class="loot-synergies"></div>
         <div class="loot-build"></div>
         <div class="loot-go">Move with <b>WASD</b> or <b>arrow keys</b> to begin</div>
       </div>
@@ -48,20 +51,44 @@ export class LootPanel {
     parent.appendChild(this.root);
     this.cards = this.root.querySelector<HTMLElement>('.loot-cards')!;
     this.build = this.root.querySelector<HTMLElement>('.loot-build')!;
+    this.synergies = this.root.querySelector<HTMLElement>('.loot-synergies')!;
+    this.go = this.root.querySelector<HTMLElement>('.loot-go')!;
     this.date = this.root.querySelector<HTMLElement>('.loot-date')!;
   }
 
-  show(loadout: Loadout, dateLabel: string): void {
+  /** Shows the reveal and returns how many milliseconds until it has finished playing. */
+  show(loadout: Loadout, dateLabel: string): number {
     this.date.textContent = dateLabel;
     this.cards.replaceChildren(
       ...[loadout.weapon, loadout.armor, loadout.trinket].map((item, i) => this.card(item, 0.25 + i * 0.6)),
     );
+
+    // Synergies pop in one by one after the three cards, then the build name, then the prompt.
+    let t = 2.0;
+    this.synergies.replaceChildren(
+      ...loadout.synergies.map((id) => {
+        const def = SYNERGIES[id];
+        const row = document.createElement('div');
+        row.className = 'loot-synergy';
+        row.style.setProperty('--delay', `${t}s`);
+        t += 0.45;
+        const title = document.createElement('b');
+        title.textContent = `Synergy: ${def.title}`;
+        row.append(title, document.createTextNode(` ${def.text}`));
+        return row;
+      }),
+    );
+    this.build.style.setProperty('--delay', `${t}s`);
+    this.go.style.setProperty('--delay', `${t + 0.4}s`);
     this.build.textContent = loadout.buildName;
     this.build.style.setProperty('--rarity', cssColor(RARITY_COLORS[loadout.bestRarity]));
+    this.root.dataset['flash'] = String(loadout.bestRarity);
+
     // Re-trigger the CSS reveal animation.
     this.root.hidden = true;
     void this.root.offsetWidth;
     this.root.hidden = false;
+    return Math.min(3200, (t + 0.5) * 1000);
   }
 
   hide(): void {
@@ -93,6 +120,14 @@ export class LootPanel {
 
     const lines = document.createElement('ul');
     lines.className = 'loot-lines';
+    if (d.signature) {
+      card.classList.add('has-signature');
+      const sig = li('', 'signature');
+      const title = document.createElement('b');
+      title.textContent = `\u2605 ${d.signature.title}`;
+      sig.append(title, document.createElement('br'), document.createTextNode(d.signature.text));
+      lines.appendChild(sig);
+    }
     for (const text of d.stats) lines.appendChild(li(text, 'stat'));
     for (const text of d.effects) lines.appendChild(li(text, 'effect'));
     if (d.drawback) lines.appendChild(li(d.drawback, 'drawback'));
@@ -102,7 +137,7 @@ export class LootPanel {
   }
 }
 
-function li(text: string, kind: 'stat' | 'effect' | 'drawback'): HTMLElement {
+function li(text: string, kind: 'stat' | 'effect' | 'drawback' | 'signature'): HTMLElement {
   const e = document.createElement('li');
   e.className = `loot-line loot-${kind}`;
   e.textContent = text;

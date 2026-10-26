@@ -10,8 +10,6 @@ import { LootPanel } from './ui/lootPanel.ts';
 
 /** Never simulate more than this much time in one frame (e.g. after a long hitch). */
 const MAX_FRAME_SECONDS = 0.25;
-/** How long the loot reveal plays before movement can start the run. */
-const REVEAL_MS = 2000;
 
 /**
  * Who is playing, for loot purposes. A random id is kept in this browser, so you get the same
@@ -74,11 +72,10 @@ async function main() {
     started = false;
     resultsShown = false;
     accumulator = 0;
-    revealUnlockAt = performance.now() + REVEAL_MS;
     renderer.reset();
     hud.reset();
     hud.setLoadout(loadout);
-    lootPanel.show(loadout, today);
+    revealUnlockAt = performance.now() + lootPanel.show(loadout, today);
   };
 
   const hud = new Hud(container, () => newRun());
@@ -109,6 +106,7 @@ async function main() {
           if (ev.type === 'bossSpawned') hud.showBanner(`${ev.name} #${ev.number} appears`, 'boss');
           else if (ev.type === 'bossDefeated') hud.showBanner(`${ev.name} defeated!`, 'boss', 1400);
           else if (ev.type === 'doom') hud.showBanner('Doom has awakened', 'doom', 3000);
+          else if (ev.type === 'revive') hud.showBanner('Phoenix Heart! Reborn from the ashes', 'boss', 2200);
         }
       }
     }

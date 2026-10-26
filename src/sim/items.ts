@@ -52,25 +52,27 @@ export interface Item {
   /** Innate effects first, then rolled affixes. */
   effects: EffectId[];
   quirk: QuirkId | null;
+  /** A rule-bending special power (Rare and above sometimes roll one). */
+  signature: SignatureId | null;
 }
 
 /** Effect numbers as a function of an item's power. Shared by the sim and the descriptions. */
 export const fx = {
-  poison: (m: number) => ({ dps: 5 * m, secs: 3 }),
-  burn: (m: number) => ({ dps: 9 * m, secs: 1.5 }),
-  shock: (m: number) => ({ frac: 0.4 * m, targets: m >= 1.5 ? 3 : 2, range: 130 }),
-  knockback: (m: number) => 20 * m,
-  lifesteal: (m: number) => ({ kills: 6, heal: Math.max(1, Math.round(2 * m)) }),
-  explosion: (m: number) => ({ damage: 14 * m, radius: 56 }),
+  poison: (m: number) => ({ dps: 8 * m, secs: 4 }),
+  burn: (m: number) => ({ dps: 15 * m, secs: 2 }),
+  shock: (m: number) => ({ frac: 0.6 * m, targets: m >= 1.5 ? 4 : 3, range: 150 }),
+  knockback: (m: number) => 30 * m,
+  lifesteal: (m: number) => ({ kills: 5, heal: Math.max(1, Math.round(3 * m)) }),
+  explosion: (m: number) => ({ damage: 24 * m, radius: 68 }),
   fortified: (m: number) => Math.round(22 * m),
   swift: (m: number) => 0.07 * m,
-  regen: (m: number) => 0.7 * m,
-  thorns: (m: number) => ({ damage: 26 * m, radius: 90 }),
-  barrier: (m: number) => 12 / m,
+  regen: (m: number) => 1.1 * m,
+  thorns: (m: number) => ({ damage: 40 * m, radius: 100 }),
+  barrier: (m: number) => 10 / m,
   twin: (m: number) => (m >= 1.5 ? 2 : 1),
   echo: (m: number) => Math.max(2, Math.round(7 - 2.4 * m)),
-  haste: (m: number) => 0.15 * m,
-  might: (m: number) => 0.2 * m,
+  haste: (m: number) => 0.2 * m,
+  might: (m: number) => 0.25 * m,
   reach: (m: number) => ({ pierce: m >= 1.5 ? 2 : 1, range: 0.12 * m }),
 };
 
@@ -298,8 +300,8 @@ export const TRINKET_EFFECTS: readonly EffectId[] = [
 
 /** How many extra effects an item rolls, by rarity. */
 export const EXTRA_EFFECTS: Record<Slot, readonly number[]> = {
-  weapon: [0, 1, 1, 2, 3],
-  armor: [0, 0, 1, 1, 2],
+  weapon: [1, 1, 2, 2, 3],
+  armor: [0, 1, 1, 2, 2],
   trinket: [0, 0, 1, 1, 2],
 };
 
@@ -320,3 +322,159 @@ export function trinketById(id: string): TrinketArchetype {
   if (!t) throw new Error(`Unknown trinket "${id}"`);
   return t;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Signatures: special powers that bend the rules. Rare+ items sometimes roll one.
+
+export type SignatureId =
+  | 'ricochet'
+  | 'nova'
+  | 'executioner'
+  | 'berserker'
+  | 'orbit'
+  | 'phoenix'
+  | 'scorch'
+  | 'bastion'
+  | 'plague'
+  | 'bloodsplosion'
+  | 'tesla'
+  | 'vortex';
+
+/** Numbers for each signature as a function of the item's power. */
+export const sx = {
+  ricochet: (m: number) => (m >= 1.5 ? 3 : 2),
+  nova: (m: number) => (m >= 1.5 ? 4 : 5),
+  execute: (m: number) => (m >= 1.5 ? 0.3 : 0.22),
+  berserker: (m: number) => m,
+  orbit: (m: number) => ({ blades: m >= 1.5 ? 4 : 3, dps: 32 * m, radius: 78 }),
+  phoenix: (m: number) => ({ heal: m >= 1.5 ? 0.75 : 0.5, damage: 200 * m, radius: 240 }),
+  scorch: (m: number) => ({ dps: 16 * m, radius: 100 }),
+  bastion: (m: number) => (m >= 1.5 ? 0.4 : 0.5),
+  plague: (m: number) => ({ damage: 34 * m, radius: 85 }),
+  bloodsplosion: (m: number) => (m >= 1.5 ? 2 : 1),
+  tesla: (m: number) => (m >= 1.5 ? 4 : 3),
+  vortex: (m: number) => ({ every: m >= 1.5 ? 6 : 8, damage: 60 * m, pull: 340 }),
+};
+
+export interface SignatureDef {
+  title: string;
+  /** Replaces the item's name prefix, e.g. "Executioner's Longbow". */
+  prefix: string;
+  slots: readonly Slot[];
+  /** Effects this power needs to work; they are added to the item when it rolls. */
+  implies: readonly EffectId[];
+  /** Doesn't make sense on melee weapons. */
+  projectileOnly?: boolean;
+  text: (m: number) => string;
+}
+
+export const SIGNATURES: Record<SignatureId, SignatureDef> = {
+  ricochet: {
+    title: 'Ricochet', prefix: 'Ricochet', slots: ['weapon'], implies: [], projectileOnly: true,
+    text: (m) => `Shots bounce between ${sx.ricochet(m)} extra enemies`,
+  },
+  nova: {
+    title: 'Nova', prefix: 'Nova', slots: ['weapon'], implies: [],
+    text: (m) => `Every ${sx.nova(m)}th attack unleashes a nova in all directions`,
+  },
+  executioner: {
+    title: 'Executioner', prefix: "Executioner's", slots: ['weapon'], implies: [],
+    text: (m) => `Hits instantly finish enemies below ${pct(sx.execute(m))} HP`,
+  },
+  berserker: {
+    title: 'Berserker', prefix: "Berserker's", slots: ['weapon'], implies: [],
+    text: (m) => `Up to +${pct(sx.berserker(m))} damage as your HP drops`,
+  },
+  orbit: {
+    title: 'Whirling Blades', prefix: 'Whirling', slots: ['weapon'], implies: [],
+    text: (m) => `${sx.orbit(m).blades} blades orbit you, ${n(sx.orbit(m).dps)}/s each`,
+  },
+  phoenix: {
+    title: 'Phoenix Heart', prefix: 'Phoenix', slots: ['armor'], implies: [],
+    text: (m) => `Once per run, death revives you at ${pct(sx.phoenix(m).heal)} HP with a huge blast`,
+  },
+  scorch: {
+    title: 'Scorching Aura', prefix: 'Scorching', slots: ['armor'], implies: [],
+    text: (m) => `Enemies near you burn for ${n(sx.scorch(m).dps)}/s`,
+  },
+  bastion: {
+    title: 'Bastion', prefix: 'Bastion', slots: ['armor'], implies: [],
+    text: (m) => `Take ${pct(1 - sx.bastion(m))} less damage while standing still`,
+  },
+  plague: {
+    title: 'Plague Bearer', prefix: 'Plague-Bearer\'s', slots: ['trinket'], implies: ['poison'],
+    text: (m) => `Poisoned enemies burst for ${n(sx.plague(m).damage)} when they die`,
+  },
+  bloodsplosion: {
+    title: 'Bloodburst', prefix: 'Bloodburst', slots: ['trinket'], implies: ['explosion'],
+    text: (m) => `Explosions heal ${sx.bloodsplosion(m)} HP per enemy hit (up to 6)`,
+  },
+  tesla: {
+    title: 'Tesla Storm', prefix: 'Tesla', slots: ['trinket'], implies: ['shock'],
+    text: (m) => `Shock arcs jump ${sx.tesla(m)} more times`,
+  },
+  vortex: {
+    title: 'Black Hole', prefix: 'Void', slots: ['trinket'], implies: [],
+    text: (m) => `Every ${sx.vortex(m).every}s, drags enemies in and blasts them`,
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Synergies: combinations of effects across your gear that unlock new behavior automatically.
+
+export type SynergyId =
+  | 'plagueBlast'
+  | 'napalm'
+  | 'concussive'
+  | 'toxicStorm'
+  | 'plasma'
+  | 'bloodNova'
+  | 'stormWard';
+
+export interface SynergyDef {
+  title: string;
+  text: string;
+  /** Every group needs at least one of its effects somewhere on your gear. */
+  needs: readonly (readonly EffectId[])[];
+}
+
+export const SYNERGIES: Record<SynergyId, SynergyDef> = {
+  plagueBlast: {
+    title: 'Plague Detonation',
+    text: 'Poisoned kills explode harder and spread poison',
+    needs: [['poison'], ['explosion']],
+  },
+  napalm: {
+    title: 'Napalm',
+    text: 'Explosions ignite everything they hit',
+    needs: [['burn'], ['explosion']],
+  },
+  concussive: {
+    title: 'Concussive Blast',
+    text: 'Explosions hurl enemies away',
+    needs: [['knockback'], ['explosion']],
+  },
+  toxicStorm: {
+    title: 'Toxic Storm',
+    text: 'Shock arcs poison their targets',
+    needs: [['poison'], ['shock']],
+  },
+  plasma: {
+    title: 'Plasma Arc',
+    text: 'Shock arcs ignite their targets',
+    needs: [['burn'], ['shock']],
+  },
+  bloodNova: {
+    title: 'Blood Nova',
+    text: 'Explosions heal you for each enemy they hit',
+    needs: [['lifesteal'], ['explosion']],
+  },
+  stormWard: {
+    title: 'Storm Ward',
+    text: 'Getting hit calls lightning down on nearby enemies',
+    needs: [['shock'], ['barrier', 'thorns']],
+  },
+};
+
+/** Even a Common can roll a signature: a humble item with a wild power is the fun surprise. */
+export const SIGNATURE_CHANCE: readonly number[] = [0.08, 0.12, 0.3, 0.7, 1];

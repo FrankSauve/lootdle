@@ -4,10 +4,12 @@ import { ENEMY_DEFS, EnemyKind } from '../sim/enemies.ts';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../sim/sim.ts';
 import type { SimEvent, SimState } from '../sim/sim.ts';
 import { generateDungeon } from './art/dungeon.ts';
+import { digitImages } from './art/digits.ts';
 import { arcImage, orbImage } from './art/effects.ts';
 import { silhouette } from './art/pixels.ts';
 import { buildArtCatalog } from './art/sprites.ts';
 import type { SpriteArt } from './art/sprites.ts';
+import { NumberPopups } from './numbers.ts';
 import { Particles } from './particles.ts';
 import { glowTexture, pixelTexture, vignetteTexture } from './textures.ts';
 
@@ -57,7 +59,16 @@ interface Ring {
   life: number;
   maxLife: number;
   color: number;
+  /** Shrinks toward the center instead of expanding (black hole). */
+  inward?: boolean;
 }
+
+/** Floating-number colors by damage source (weapon, explosion, lightning). */
+const HIT_COLORS = [0xffffff, 0xffc94a, 0xfff06a];
+const VORTEX_COLORS = [0xb06bff, 0x6a3fc2, 0xe6d0ff];
+const REVIVE_COLORS = [0xffc94a, 0xfff6c0, 0xff8a2b];
+/** At most this many floating numbers per rendered frame, so crowds stay readable. */
+const NUMBERS_PER_FRAME = 8;
 interface Bolt {
   x: number;
   y: number;
@@ -109,6 +120,9 @@ export class GameRenderer {
   private readonly slashLayer = new Container();
   private playerX = 0;
   private playerY = 0;
+  private readonly numbers: NumberPopups;
+  private numberBudget = NUMBERS_PER_FRAME;
+  private readonly bladeSprites: Sprite[] = [];
 
   private readonly enemySprites: Sprite[] = [];
   private readonly enemyShadows: Sprite[] = [];
@@ -175,6 +189,7 @@ export class GameRenderer {
     this.shadowLayer.addChild(this.playerShadow);
     this.player = this.makeSprite(this.playerArt.frames[0]!);
     this.particles = new Particles(pixelTexture(art.pixel), PX);
+    this.numbers = new NumberPopups(digitImages().map(pixelTexture), PX);
 
     this.world.addChild(
       this.shadowLayer,
@@ -183,6 +198,7 @@ export class GameRenderer {
       this.projectileLayer,
       this.slashLayer,
       this.particles.container,
+      this.numbers.container,
       this.overlay,
     );
     this.scene.addChild(glowLayer, this.world, torchLayer);
@@ -206,6 +222,7 @@ export class GameRenderer {
   reset(): void {
     this.setDoom(false);
     this.particles.clear();
+    this.numbers.clear();
     this.shake = 0;
     this.rings.length = 0;
     this.bolts.length = 0;
@@ -228,7 +245,25 @@ export class GameRenderer {
         case 'explosion':
           this.particles.burst(ev.x, ev.y, EXPLOSION_COLORS, 6 + Math.round(ev.radius / 10), 240);
           this.rings.push({ x: ev.x, y: ev.y, radius: ev.radius, life: 0.22, maxLife: 0.22, color: 0xffc94a });
-          this.shake = Math.max(this.shake, 1.5);
+          this.shake = Math.max(this.shake, Math.min(5, 1 + ev.radius / 60));
+          break;
+        case 'hit':
+          if (this.numberBudget > 0) {
+            this.numberBudget--;
+            this.numbers.spawn(ev.x, ev.y, ev.amount, HIT_COLORS[ev.src] ?? 0xffffff);
+          }
+          break;
+        case 'vortex':
+          this.particles.burst(this.playerX, this.playerY, VORTEX_COLORS, 40, 360);
+          this.rings.push({
+            x: this.playerX, y: this.playerY, radius: ev.radius, life: 0.4, maxLife: 0.4, color: 0xb06bff, inward: true,
+          });
+          this.shake = Math.max(this.shake, 5);
+          break;
+        case 'revive':
+          this.particles.burst(this.playerX, this.playerY, REVIVE_COLORS, 90, 520);
+          this.rings.push({ x: this.playerX, y: this.playerY, radius: 260, life: 0.5, maxLife: 0.5, color: 0xffc94a });
+          this.shake = Math.max(this.shake, 9);
           break;
         case 'zap':
           this.bolts.push({
@@ -350,8 +385,31 @@ export class GameRenderer {
     }
 
     this.drawBossBars(state, alpha);
-    this.drawEffects(frameSeconds);
+    this.drawOrbit(state);
+    this.drawEffects(state, frameSeconds);
     this.particles.update(frameSeconds);
+    this.numbers.update(frameSeconds);
+    this.numberBudget = NUMBERS_PER_FRAME;
+  }
+
+  /** Orbiting blades (Whirling Blades), drawn as spinning daggers around the player. */
+  private drawOrbit(state: SimState): void {
+    const count = state.build.orbitBlades;
+    while (this.bladeSprites.length < count) {
+      const s = this.makeSprite(this.knifeTexture);
+      s.scale.set(PX * 1.5);
+      this.bladeSprites.push(s);
+      this.projectileLayer.addChild(s);
+    }
+    for (let i = 0; i < this.bladeSprites.length; i++) {
+      const s = this.bladeSprites[i]!;
+      s.visible = i < count;
+      if (!s.visible) continue;
+      const bx = state.orbitPos[i * 2]!;
+      const by = state.orbitPos[i * 2 + 1]!;
+      s.position.set(bx, by);
+      s.rotation = Math.atan2(by - state.player.y, bx - state.player.x) + Math.PI / 2;
+    }
   }
 
   private addSlash(x: number, y: number, dx: number, dy: number, radius: number): void {
@@ -369,8 +427,16 @@ export class GameRenderer {
   }
 
   /** Short-lived effects: expanding rings, lightning bolts and melee slashes. */
-  private drawEffects(frameSeconds: number): void {
+  private drawEffects(state: SimState, frameSeconds: number): void {
     const g = this.overlay;
+    if (state.build.scorchDps > 0) {
+      const flicker = 0.5 + 0.5 * Math.sin(this.time * 9);
+      g.circle(this.playerX, this.playerY, state.build.scorchRadius).stroke({
+        width: PX,
+        color: 0xff6a2b,
+        alpha: 0.25 + 0.2 * flicker,
+      });
+    }
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i]!;
       r.life -= frameSeconds;
@@ -379,7 +445,8 @@ export class GameRenderer {
         continue;
       }
       const t = 1 - r.life / r.maxLife;
-      g.circle(r.x, r.y, r.radius * (0.35 + 0.65 * t)).stroke({ width: PX * 2, color: r.color });
+      const scale = r.inward ? 1 - 0.8 * t : 0.35 + 0.65 * t;
+      g.circle(r.x, r.y, r.radius * scale).stroke({ width: PX * 2, color: r.color });
     }
     for (let i = this.bolts.length - 1; i >= 0; i--) {
       const b = this.bolts[i]!;

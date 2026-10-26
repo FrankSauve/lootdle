@@ -10,13 +10,16 @@ import {
   OFFENSIVE_EFFECTS,
   QUIRKS,
   RARITY_WEIGHTS,
+  SIGNATURES,
+  SIGNATURE_CHANCE,
+  SYNERGIES,
   TRINKETS,
   TRINKET_EFFECTS,
   WEAPONS,
   armorById,
   weaponById,
 } from './items.ts';
-import type { EffectId, Family, Item, QuirkId, Rarity, Slot } from './items.ts';
+import type { EffectId, Family, Item, QuirkId, Rarity, SignatureId, Slot, SynergyId } from './items.ts';
 import { createRng, hashSeed } from './rng.ts';
 import type { Rng } from './rng.ts';
 
@@ -28,6 +31,8 @@ export interface Loadout {
   /** Fun name for the whole build, e.g. "The Walking Plague". */
   buildName: string;
   family: Family;
+  /** Combinations across your gear that unlock extra behavior. */
+  synergies: SynergyId[];
   /** Highest rarity among the three items (for flair; never used to rank runs). */
   bestRarity: Rarity;
 }
@@ -64,14 +69,15 @@ export function generateLoadout(playerSeed: number): Loadout {
   const items = [weapon, armor, trinket];
   const bestRarity = Math.max(weapon.rarity, armor.rarity, trinket.rarity) as Rarity;
   const { family, buildName } = nameBuild(items);
-  return { seed: playerSeed >>> 0, weapon, armor, trinket, buildName, family, bestRarity };
+  const synergies = findSynergies(items);
+  return { seed: playerSeed >>> 0, weapon, armor, trinket, buildName, family, synergies, bestRarity };
 }
 
 function rollWeapon(rng: Rng): Item {
   const base = pick(rng, WEAPONS);
   const rarity = rollRarity(rng);
   const effects = pickDistinct(rng, OFFENSIVE_EFFECTS, EXTRA_EFFECTS.weapon[rarity]!, []);
-  return finishItem(rng, 'weapon', base.id, base.name, rarity, effects);
+  return finishItem(rng, 'weapon', base.id, base.name, rarity, effects, base.melee);
 }
 
 function rollArmor(rng: Rng): Item {
@@ -96,7 +102,23 @@ function finishItem(
   baseName: string,
   rarity: Rarity,
   effects: EffectId[],
+  melee = false,
 ): Item {
+  // Signature: Rare+ items sometimes carry a rule-bending power (and the effects it relies on).
+  let signature: SignatureId | null = null;
+  const sigRoll = rng();
+  const sigPick = rng();
+  if (sigRoll < SIGNATURE_CHANCE[rarity]!) {
+    const options = (Object.keys(SIGNATURES) as SignatureId[]).filter((s) => {
+      const def = SIGNATURES[s];
+      return def.slots.includes(slot) && !(melee && def.projectileOnly);
+    });
+    signature = options[Math.floor(sigPick * options.length)] ?? null;
+  }
+  if (signature) {
+    for (const e of SIGNATURES[signature].implies) if (!effects.includes(e)) effects = [...effects, e];
+  }
+
   let quirk: QuirkId | null = null;
   const quirkRoll = rng();
   const quirkPick = rng();
@@ -111,12 +133,12 @@ function finishItem(
   const innateCount = slot === 'armor' ? armorById(id).innate.length : slot === 'trinket' ? 1 : 0;
   const rolled = effects.slice(innateCount);
   const adjective = rolled.length > 0 ? EFFECTS[rolled[0]!].adjective : null;
-  const prefix = quirk ? QUIRKS[quirk].prefix : adjective;
+  const prefix = signature ? SIGNATURES[signature].prefix : quirk ? QUIRKS[quirk].prefix : adjective;
   let name = prefix ? `${prefix} ${baseName}` : baseName;
   if (rarity >= 3) name += ` ${SUFFIXES[Math.floor(suffixRoll * SUFFIXES.length)]!}`;
 
   const power = (1 + 0.14 * rarity) * (quirk ? QUIRK_POWER_BONUS : 1);
-  return { slot, id, name, rarity, power, effects, quirk };
+  return { slot, id, name, rarity, power, effects, quirk, signature };
 }
 
 function rollRarity(rng: Rng): Rarity {
@@ -150,6 +172,14 @@ function pickDistinct(
   return out;
 }
 
+/** Which synergies are active, given every effect on all three items. */
+export function findSynergies(items: readonly Item[]): SynergyId[] {
+  const have = new Set<EffectId>(items.flatMap((i) => i.effects));
+  return (Object.keys(SYNERGIES) as SynergyId[]).filter((id) =>
+    SYNERGIES[id].needs.every((group) => group.some((e) => have.has(e))),
+  );
+}
+
 function nameBuild(items: readonly Item[]): { family: Family; buildName: string } {
   const score = new Map<Family, number>();
   for (const item of items) {
@@ -178,6 +208,8 @@ function nameBuild(items: readonly Item[]): { family: Family; buildName: string 
 /** Human-readable lines for the loot cards. */
 export interface ItemDescription {
   stats: string[];
+  /** The signature power, if any. */
+  signature: { title: string; text: string } | null;
   effects: string[];
   drawback: string | null;
 }
@@ -200,5 +232,7 @@ export function describeItem(item: Item): ItemDescription {
   }
   const effects = item.effects.map((e) => EFFECTS[e].text(item.power));
   const drawback = item.quirk ? `${QUIRKS[item.quirk].label}: ${QUIRKS[item.quirk].text}` : null;
-  return { stats, effects, drawback };
+  const sig = item.signature ? SIGNATURES[item.signature] : null;
+  const signature = sig && item.signature ? { title: sig.title, text: sig.text(item.power) } : null;
+  return { stats, signature, effects, drawback };
 }

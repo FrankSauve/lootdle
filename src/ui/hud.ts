@@ -1,4 +1,4 @@
-import { RARITY_COLORS, RARITY_NAMES } from '../sim/items.ts';
+import { RARITY_COLORS, RARITY_NAMES, SIGNATURES } from '../sim/items.ts';
 import type { SimState } from '../sim/sim.ts';
 import { elapsedSeconds } from '../sim/sim.ts';
 import type { Loadout } from '../sim/sim.ts';
@@ -103,7 +103,7 @@ export class Hud {
         const slot = document.createElement('span');
         slot.className = 'hud-gear-slot';
         slot.style.setProperty('--rarity', cssColor(RARITY_COLORS[item.rarity]));
-        slot.title = `${item.name} (${RARITY_NAMES[item.rarity]})`;
+        slot.title = `${item.name} (${RARITY_NAMES[item.rarity]})${item.signature ? ` \u2605 ${SIGNATURES[item.signature].title}` : ''}`;
         slot.appendChild(itemIconCanvas(item, 2));
         return slot;
       }),

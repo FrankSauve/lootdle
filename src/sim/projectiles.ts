@@ -22,6 +22,8 @@ export class ProjectilePool {
   readonly lastHitId: Uint32Array;
   /** The hit before that, so a piercing projectile overlapping two enemies doesn't ping-pong. */
   readonly lastHitId2: Uint32Array;
+  /** How many times a ricocheting projectile has bounced. */
+  readonly bounces: Uint8Array;
 
   constructor(capacity = MAX_PROJECTILES) {
     this.capacity = capacity;
@@ -38,6 +40,7 @@ export class ProjectilePool {
     this.pierce = new Int32Array(capacity);
     this.lastHitId = new Uint32Array(capacity);
     this.lastHitId2 = new Uint32Array(capacity);
+    this.bounces = new Uint8Array(capacity);
   }
 
   spawn(
@@ -63,6 +66,7 @@ export class ProjectilePool {
     this.pierce[i] = pierce;
     this.lastHitId[i] = 0;
     this.lastHitId2[i] = 0;
+    this.bounces[i] = 0;
     return i;
   }
 
@@ -84,6 +88,7 @@ export class ProjectilePool {
         this.pierce[w] = this.pierce[r]!;
         this.lastHitId[w] = this.lastHitId[r]!;
         this.lastHitId2[w] = this.lastHitId2[r]!;
+        this.bounces[w] = this.bounces[r]!;
       }
       w++;
     }

@@ -69,3 +69,13 @@ echo, ...) + an optional drawback. The pieces live in `src/sim/items.ts`, the ro
 - Preview someone else's loot: open `http://localhost:5173/?player=anything`.
 - `npm run sim:check` also checks loot determinism, the rarity mix, and that rarity doesn't
   decide survival on its own.
+
+### Signatures and synergies
+
+Rarer items can carry a *signature*: a rule-bending power such as Whirling Blades, Phoenix Heart,
+Black Hole or Executioner (`SIGNATURES` in `src/sim/items.ts`). Separately, certain combinations
+of effects across your gear unlock a *synergy* automatically (Napalm, Plague Detonation, Storm
+Ward, ...; `SYNERGIES`). Both show up on the loot reveal screen.
+
+Handy previews (today's date seeds them): `?player=p12` (blades + phoenix), `?player=p16`
+(explosions + napalm), `?player=p38` (tesla storm + blood nova).

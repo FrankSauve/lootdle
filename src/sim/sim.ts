@@ -18,7 +18,7 @@ import {
 import { ARENA_HEIGHT, ARENA_WIDTH, DT, GRID_CELL_SIZE, MAX_ENEMIES } from './config.ts';
 import { compileBuild } from './build.ts';
 import { updateDirector } from './director.ts';
-import { tickBuild, tickStatuses } from './effects.ts';
+import { tickAuras, tickBuild, tickStatuses } from './effects.ts';
 import { EnemyPool } from './enemies.ts';
 import { SpatialGrid } from './grid.ts';
 import { generateLoadout } from './loot.ts';
@@ -73,6 +73,13 @@ export function createSim(options: SimOptions): SimState {
     nearby: new Int32Array(MAX_ENEMIES),
     shots: 0,
     killsSinceHeal: 0,
+    volleys: 0,
+    phoenixUsed: false,
+    vortexTimer: build.vortexEvery,
+    orbitX: 1,
+    orbitY: 0,
+    orbitPos: new Float64Array(10),
+    zapsThisTick: 0,
     barrierTimer: 0,
     explosionsThisTick: 0,
     effectDepth: 0,
@@ -94,6 +101,7 @@ export function stepSim(state: SimState, input: MoveInput): void {
   if (state.over) return;
   state.events.length = 0;
   state.explosionsThisTick = 0;
+  state.zapsThisTick = 0;
   state.effectDepth = 0;
 
   savePreviousPositions(state);
@@ -108,6 +116,7 @@ export function stepSim(state: SimState, input: MoveInput): void {
   separateEnemies(state);
 
   updateWeapon(state);
+  tickAuras(state);
   updateProjectiles(state);
   tickStatuses(state);
   updatePlayerContact(state);

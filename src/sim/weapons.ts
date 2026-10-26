@@ -1,7 +1,7 @@
 import type { Build } from './build.ts';
 import { DT } from './config.ts';
 import { damageEnemy } from './combat.ts';
-import { applyHitEffects } from './effects.ts';
+import { applyHitEffects, explode } from './effects.ts';
 import { MAX_ENEMY_RADIUS } from './enemies.ts';
 import type { SimState, WeaponState } from './state.ts';
 
@@ -77,6 +77,46 @@ export function updateWeapon(state: SimState): void {
       fireAt(state, targetIdx[(n + 1) % found]!, found === 1 ? 0.35 : 0);
     }
   }
+
+  state.volleys++;
+  if (b.novaEvery > 0 && state.volleys % b.novaEvery === 0) nova(state);
+}
+
+/** Berserker: damage climbs as the player's HP drops. */
+function attackDamage(state: SimState): number {
+  const b = state.build;
+  const p = state.player;
+  if (b.berserker <= 0) return state.weapon.damage;
+  return state.weapon.damage * (1 + b.berserker * (1 - p.hp / p.maxHp));
+}
+
+/** Eight exact directions (no trigonometry needed). */
+const R = 0.7071067811865476;
+const NOVA_DIRS: readonly (readonly [number, number])[] = [
+  [1, 0], [R, R], [0, 1], [-R, R], [-1, 0], [-R, -R], [0, -1], [R, -R],
+];
+
+/** Nova: a ring of projectiles, or a heavy shockwave for melee weapons. */
+function nova(state: SimState): void {
+  const w = state.weapon;
+  const p = state.player;
+  const damage = attackDamage(state);
+  if (w.melee) {
+    explode(state, p.x, p.y, w.meleeRadius * 1.9, damage * 1.5, 40);
+    return;
+  }
+  for (const [dx, dy] of NOVA_DIRS) {
+    state.projectiles.spawn(
+      p.x,
+      p.y,
+      dx * w.projectileSpeed,
+      dy * w.projectileSpeed,
+      damage,
+      w.projectileRadius,
+      w.projectileLife,
+      w.pierce,
+    );
+  }
 }
 
 /** Aims at enemy `t`, adds any extra angle and jitter, then fires or swings. */
@@ -103,7 +143,7 @@ function fireAt(state: SimState, t: number, extraAngle: number): void {
     p.y,
     dx * w.projectileSpeed,
     dy * w.projectileSpeed,
-    w.damage,
+    attackDamage(state),
     w.projectileRadius,
     w.projectileLife,
     w.pierce,
@@ -124,6 +164,7 @@ function swing(state: SimState, dx: number, dy: number): void {
   const w = state.weapon;
   const p = state.player;
   const e = state.enemies;
+  const damage = attackDamage(state);
   const cx = p.x + dx * w.meleeOffset;
   const cy = p.y + dy * w.meleeOffset;
   state.events.push({ type: 'slash', x: cx, y: cy, dx, dy, radius: w.meleeRadius });
@@ -137,7 +178,7 @@ function swing(state: SimState, dx: number, dy: number): void {
     const ey = e.y[j]! - cy;
     const reach = w.meleeRadius + e.radius[j]!;
     if (ex * ex + ey * ey > reach * reach) continue;
-    damageEnemy(state, j, w.damage);
-    applyHitEffects(state, j, dx, dy, w.damage);
+    damageEnemy(state, j, damage);
+    applyHitEffects(state, j, dx, dy, damage);
   }
 }

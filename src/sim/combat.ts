@@ -1,9 +1,10 @@
 import { ARENA_HEIGHT, ARENA_WIDTH, DT } from './config.ts';
-import { applyHitEffects, explode, onEnemyKilled } from './effects.ts';
+import { SRC_WEAPON, applyHitEffects, explode, onEnemyKilled, stormStrike } from './effects.ts';
 import { ENEMY_DEFS, EnemyKind, MAX_ENEMY_RADIUS } from './enemies.ts';
 import type { SimState } from './state.ts';
 
 const PLAYER_INVULNERABLE_SECONDS = 0.5;
+const RICOCHET_RANGE = 260;
 const HIT_FLASH_SECONDS = 0.08;
 /** Flankers aim this far to the side of the player until they get close. */
 const FLANK_OFFSET = 140;
@@ -103,7 +104,7 @@ export function updateProjectiles(state: SimState): void {
       pr.lastHitId2[i] = pr.lastHitId[i]!;
       pr.lastHitId[i] = e.id[j]!;
       if (pr.pierce[i]! <= 0) {
-        pr.dead[i] = 1;
+        if (!ricochet(state, i, j, speed)) pr.dead[i] = 1;
         break;
       }
       pr.pierce[i] = pr.pierce[i]! - 1;
@@ -111,13 +112,57 @@ export function updateProjectiles(state: SimState): void {
   }
 }
 
-/** Damages enemy `i`. `flash: false` is for damage-over-time, which shouldn't strobe the sprite. */
-export function damageEnemy(state: SimState, i: number, amount: number, flash = true): void {
+/** Ricochet: redirect a spent projectile toward another nearby enemy instead of removing it. */
+function ricochet(state: SimState, i: number, hit: number, speed: number): boolean {
+  const b = state.build;
+  const pr = state.projectiles;
+  if (b.ricochet <= 0 || pr.bounces[i]! >= b.ricochet) return false;
+  const e = state.enemies;
+  const buf = state.zapBuf;
+  const x = pr.x[i]!;
+  const y = pr.y[i]!;
+  const n = state.grid.query(x, y, RICOCHET_RANGE + MAX_ENEMY_RADIUS, buf);
+  let best = -1;
+  let bestD = RICOCHET_RANGE * RICOCHET_RANGE;
+  for (let k = 0; k < n; k++) {
+    const t = buf[k]!;
+    if (t === hit || e.dead[t]) continue;
+    const dx = e.x[t]! - x;
+    const dy = e.y[t]! - y;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) {
+      bestD = d;
+      best = t;
+    }
+  }
+  if (best < 0) return false;
+  const len = Math.sqrt(bestD) || 1;
+  pr.vx[i] = ((e.x[best]! - x) / len) * speed;
+  pr.vy[i] = ((e.y[best]! - y) / len) * speed;
+  pr.bounces[i] = pr.bounces[i]! + 1;
+  pr.life[i] = Math.max(pr.life[i]!, 0.6);
+  return true;
+}
+
+/**
+ * Damages enemy `i`. `flash: false` is for damage-over-time, which shouldn't strobe the sprite
+ * (and doesn't produce floating numbers). `src` says where the damage came from (for colors).
+ */
+export function damageEnemy(
+  state: SimState,
+  i: number,
+  amount: number,
+  flash = true,
+  src: number = SRC_WEAPON,
+): void {
   const e = state.enemies;
   if (e.dead[i]) return;
   const dealt = Math.min(amount, e.hp[i]!);
   e.hp[i] = e.hp[i]! - amount;
-  if (flash) e.flash[i] = HIT_FLASH_SECONDS;
+  if (flash) {
+    e.flash[i] = HIT_FLASH_SECONDS;
+    state.events.push({ type: 'hit', x: e.x[i]!, y: e.y[i]!, amount, src });
+  }
   state.stats.damageDealt += dealt;
   if (e.hp[i]! <= 0) killEnemy(state, i);
 }
@@ -148,7 +193,7 @@ function killEnemy(state: SimState, i: number): void {
     e.spawn(EnemyKind.Slimelet, x + o, y + o, hpMul * 0.5, dmgMul);
   }
 
-  onEnemyKilled(state, x, y);
+  onEnemyKilled(state, x, y, e.poisonT[i]! > 0);
 }
 
 /** Contact damage from enemies touching the player, with brief invulnerability after each hit. */
@@ -176,8 +221,9 @@ export function updatePlayerContact(state: SimState): void {
   const b = state.build;
   p.invulnerable = PLAYER_INVULNERABLE_SECONDS;
 
-  // A ready barrier soaks the whole hit.
-  let taken = worst * b.damageTakenMul;
+  // A ready barrier soaks the whole hit; Bastion halves damage while standing still.
+  const still = p.x === p.prevX && p.y === p.prevY;
+  let taken = worst * b.damageTakenMul * (still ? b.bastionMul : 1);
   if (b.barrierCooldown > 0 && state.barrierTimer <= 0) {
     state.barrierTimer = b.barrierCooldown;
     state.events.push({ type: 'blocked' });
@@ -186,12 +232,22 @@ export function updatePlayerContact(state: SimState): void {
     state.events.push({ type: 'playerHit', damage: taken });
   }
 
-  // Thorns retaliate whether or not the hit got through.
+  // Thorns and Storm Ward retaliate whether or not the hit got through.
   if (b.thornsDamage > 0) explode(state, p.x, p.y, b.thornsRadius, b.thornsDamage);
+  if (b.stormWard) stormStrike(state);
 
   if (state.godMode || taken <= 0) return;
   p.hp = Math.max(0, p.hp - taken);
   state.stats.damageTaken += taken;
+
+  // Phoenix Heart: once per run, death is cheated.
+  if (p.hp <= 0 && b.phoenixHeal > 0 && !state.phoenixUsed) {
+    state.phoenixUsed = true;
+    p.hp = Math.max(1, p.maxHp * b.phoenixHeal);
+    p.invulnerable = 2;
+    state.events.push({ type: 'revive' });
+    explode(state, p.x, p.y, b.phoenixRadius, b.phoenixDamage, 90);
+  }
 }
 
 export function updateFlashes(state: SimState): void {
