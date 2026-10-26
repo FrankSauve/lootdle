@@ -3,12 +3,35 @@ import './style.css';
 import { createKeyboardInput } from './input/keyboard.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, GameRenderer } from './render/renderer.ts';
 import { hashSeed } from './sim/rng.ts';
-import { DT, createSim, stepSim } from './sim/sim.ts';
+import { DT, createSim, generateLoadout, stepSim } from './sim/sim.ts';
 import type { SimState } from './sim/sim.ts';
 import { Hud } from './ui/hud.ts';
+import { LootPanel } from './ui/lootPanel.ts';
 
 /** Never simulate more than this much time in one frame (e.g. after a long hitch). */
 const MAX_FRAME_SECONDS = 0.25;
+/** How long the loot reveal plays before movement can start the run. */
+const REVEAL_MS = 2000;
+
+/**
+ * Who is playing, for loot purposes. A random id is kept in this browser, so you get the same
+ * loot all day (a refresh never rerolls it). `?player=name` previews another player's loot.
+ * Real accounts replace this later, with the loadout stored server-side.
+ */
+function getPlayerId(): string {
+  const fromUrl = new URLSearchParams(window.location.search).get('player');
+  if (fromUrl) return fromUrl;
+  try {
+    let id = window.localStorage.getItem('lootdle.player');
+    if (!id) {
+      id = Array.from(crypto.getRandomValues(new Uint32Array(4)), (n) => n.toString(16)).join('');
+      window.localStorage.setItem('lootdle.player', id);
+    }
+    return id;
+  } catch {
+    return 'anonymous';
+  }
+}
 
 async function main() {
   const container = document.getElementById('app')!;
@@ -34,25 +57,32 @@ async function main() {
   new ResizeObserver(fit).observe(stage);
   fit();
 
-  // Shared daily schedule (UTC date) + a per-session player seed until accounts/loot exist.
+  // The daily world is shared by everyone; the loot is yours alone (same all day).
   const today = new Date().toISOString().slice(0, 10);
   const worldSeed = hashSeed(`lootdle:${today}`);
+  const playerSeed = hashSeed(`lootdle:${today}:${getPlayerId()}`);
+  const loadout = generateLoadout(playerSeed);
 
   let sim: SimState;
   let started = false;
   let resultsShown = false;
   let accumulator = 0;
+  let revealUnlockAt = 0;
 
   const newRun = () => {
-    sim = createSim({ worldSeed, playerSeed: (Math.random() * 2 ** 32) >>> 0 });
+    sim = createSim({ worldSeed, playerSeed, loadout });
     started = false;
     resultsShown = false;
     accumulator = 0;
+    revealUnlockAt = performance.now() + REVEAL_MS;
     renderer.reset();
     hud.reset();
+    hud.setLoadout(loadout);
+    lootPanel.show(loadout, today);
   };
 
   const hud = new Hud(container, () => newRun());
+  const lootPanel = new LootPanel(container);
   newRun();
 
   window.addEventListener('keydown', (e) => {
@@ -63,10 +93,10 @@ async function main() {
     const frameSeconds = Math.min(ticker.deltaMS / 1000, MAX_FRAME_SECONDS);
     const move = input.read();
 
-    // The run (and the clock) starts on the first movement.
-    if (!started && (move.x !== 0 || move.y !== 0)) {
+    // The run (and the clock) starts on the first movement, once the loot reveal has played.
+    if (!started && (move.x !== 0 || move.y !== 0) && performance.now() >= revealUnlockAt) {
       started = true;
-      hud.setPromptVisible(false);
+      lootPanel.hide();
     }
 
     if (started && !sim.over) {

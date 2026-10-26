@@ -1,5 +1,7 @@
+import type { Build } from './build.ts';
 import type { EnemyKind, EnemyPool } from './enemies.ts';
 import type { SpatialGrid } from './grid.ts';
+import type { Loadout } from './loot.ts';
 import type { ProjectilePool } from './projectiles.ts';
 import type { Rng } from './rng.ts';
 
@@ -36,6 +38,11 @@ export interface WeaponState {
   pierce: number;
   /** Only targets enemies within this distance. */
   range: number;
+  /** Melee weapons strike an area instead of firing projectiles. */
+  melee: boolean;
+  meleeRadius: number;
+  /** Distance from the player to the center of a melee strike. */
+  meleeOffset: number;
 }
 
 export interface RunStats {
@@ -54,6 +61,11 @@ export type SimEvent =
   | { type: 'playerHit'; damage: number }
   | { type: 'bossSpawned'; number: number; name: string }
   | { type: 'bossDefeated'; x: number; y: number; name: string }
+  | { type: 'explosion'; x: number; y: number; radius: number }
+  | { type: 'zap'; x: number; y: number; toX: number; toY: number }
+  | { type: 'slash'; x: number; y: number; dx: number; dy: number; radius: number }
+  | { type: 'heal'; amount: number }
+  | { type: 'blocked' }
   | { type: 'doom' }
   | { type: 'playerDied' };
 
@@ -69,6 +81,10 @@ export interface SimState {
   /** Per-player stream: loot and upgrades (used once those systems exist). */
   playerRng: Rng;
 
+  /** Today's equipment and the numbers compiled from it. */
+  loadout: Loadout;
+  build: Build;
+
   player: PlayerState;
   weapon: WeaponState;
   enemies: EnemyPool;
@@ -76,6 +92,18 @@ export interface SimState {
   grid: SpatialGrid;
   /** Scratch buffer for grid queries. */
   nearby: Int32Array;
+
+  /** Total shots fired (drives "every Nth shot" effects). */
+  shots: number;
+  killsSinceHeal: number;
+  /** Seconds until the barrier can block again (0 = ready). */
+  barrierTimer: number;
+  /** Explosions so far this tick, and how deeply chained we are: both capped for performance. */
+  explosionsThisTick: number;
+  effectDepth: number;
+  /** One scratch buffer per explosion depth, plus one for shock arcs. */
+  blastBufs: Int32Array[];
+  zapBuf: Int32Array;
 
   /** Fractional enemies owed by the spawn director. */
   spawnBudget: number;

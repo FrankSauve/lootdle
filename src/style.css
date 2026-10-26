@@ -53,8 +53,8 @@ body {
 /* Pixel-art panel: hard edges, no rounded corners, a light border and a dark outer outline. */
 .pixel-panel,
 .hud-banner,
-.hud-prompt,
-.hud-results {
+.hud-results,
+.loot-card {
   background: var(--panel);
   border: 4px solid var(--panel-edge);
   box-shadow:
@@ -157,23 +157,6 @@ body {
   font-size: clamp(16px, 3.4vw, 34px);
 }
 
-.hud-prompt {
-  position: absolute;
-  bottom: 16%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 18px;
-  color: var(--dim);
-  font-size: 24px;
-  white-space: nowrap;
-  animation: blink 1.2s steps(2) infinite;
-}
-
-.hud-prompt b {
-  color: var(--gold);
-  font-weight: normal;
-}
-
 @keyframes blink {
   50% {
     opacity: 0.6;
@@ -246,6 +229,201 @@ body {
 
 .hud-restart span {
   opacity: 0.7;
+}
+
+/* Top-bar gear icons. */
+.hud-gear {
+  display: flex;
+  gap: 6px;
+  margin-right: 8px;
+  pointer-events: auto;
+}
+
+.hud-gear-slot {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 2px solid var(--rarity, var(--panel-edge));
+  background: var(--ink);
+}
+
+.item-icon {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Results: build name and gear. */
+.hud-results-build {
+  margin-bottom: 10px;
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  color: var(--gold);
+}
+
+.hud-results-gear {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.hud-results-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--rarity);
+  font-size: 22px;
+}
+
+/* Today's loot reveal. */
+.loot-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(11, 8, 16, 0.86);
+  overflow: auto;
+}
+
+.loot-panel {
+  width: min(860px, 100%);
+  text-align: center;
+}
+
+.loot-head {
+  margin-bottom: 14px;
+  font-family: var(--pixel-font);
+  font-size: clamp(12px, 2vw, 18px);
+  text-transform: uppercase;
+  text-shadow: 3px 3px 0 var(--ink);
+}
+
+.loot-date {
+  margin-left: 10px;
+  font-family: var(--text-font);
+  font-size: 22px;
+  color: var(--dim);
+  text-transform: none;
+}
+
+.loot-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+
+.loot-card {
+  border-color: var(--rarity);
+  padding: 12px 12px 14px;
+  text-align: center;
+  opacity: 0;
+  animation: loot-reveal 0.45s steps(5) forwards;
+  animation-delay: var(--delay, 0s);
+}
+
+.loot-card.rarity-3,
+.loot-card.rarity-4 {
+  box-shadow:
+    0 0 0 4px var(--ink),
+    0 0 18px 4px var(--rarity),
+    inset -4px -4px 0 rgba(0, 0, 0, 0.35);
+}
+
+@keyframes loot-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.loot-icon {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  margin: 0 auto 8px;
+  border: 4px solid var(--rarity);
+  background: var(--ink);
+}
+
+.loot-slot {
+  font-family: var(--pixel-font);
+  font-size: 9px;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+.loot-name {
+  margin: 8px 0 2px;
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: normal;
+  color: var(--rarity);
+}
+
+.loot-rarity {
+  margin-bottom: 8px;
+  font-size: 20px;
+  color: var(--rarity);
+  text-transform: uppercase;
+}
+
+.loot-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 21px;
+  line-height: 1.15;
+}
+
+.loot-line {
+  margin-top: 3px;
+}
+
+.loot-stat {
+  color: var(--dim);
+}
+
+.loot-effect {
+  color: var(--text);
+}
+
+.loot-drawback {
+  margin-top: 8px;
+  color: #ff7a8a;
+}
+
+.loot-build {
+  margin-top: 18px;
+  font-family: var(--pixel-font);
+  font-size: clamp(12px, 2.4vw, 20px);
+  color: var(--rarity, var(--gold));
+  text-shadow: 3px 3px 0 var(--ink);
+  opacity: 0;
+  animation: loot-reveal 0.5s steps(5) 1.7s forwards;
+}
+
+.loot-go {
+  margin-top: 14px;
+  font-size: 24px;
+  color: var(--dim);
+  opacity: 0;
+  animation:
+    loot-reveal 0.4s steps(4) 2s forwards,
+    blink 1.2s steps(2) 2.4s infinite;
+}
+
+.loot-go b {
+  color: var(--gold);
+  font-weight: normal;
 }
 
 [hidden] {

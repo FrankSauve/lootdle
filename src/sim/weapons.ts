@@ -1,27 +1,36 @@
+import type { Build } from './build.ts';
 import { DT } from './config.ts';
+import { damageEnemy } from './combat.ts';
+import { applyHitEffects } from './effects.ts';
+import { MAX_ENEMY_RADIUS } from './enemies.ts';
 import type { SimState, WeaponState } from './state.ts';
 
-/** Placeholder starting weapon until loot generation exists. */
-export function createThrowingKnives(): WeaponState {
+export function createWeapon(build: Build, name: string): WeaponState {
   return {
-    name: 'Throwing Knives',
-    cooldown: 0.35,
+    name,
+    cooldown: build.cooldown,
     timer: 0.2,
-    projectilesPerVolley: 2,
-    damage: 12,
-    projectileSpeed: 720,
-    projectileRadius: 6,
-    projectileLife: 1.1,
-    pierce: 0,
-    range: 520,
+    projectilesPerVolley: build.count,
+    damage: build.damage,
+    projectileSpeed: build.projectileSpeed,
+    projectileRadius: build.projectileRadius,
+    projectileLife: build.projectileLife,
+    pierce: build.pierce,
+    range: build.range,
+    melee: build.melee,
+    meleeRadius: build.meleeRadius,
+    meleeOffset: build.meleeOffset,
   };
 }
 
 const MAX_TARGETS = 16;
 const targetIdx = new Int32Array(MAX_TARGETS);
 const targetDist = new Float64Array(MAX_TARGETS);
+/** Scratch aim direction (avoids allocating per shot). */
+let aimX = 0;
+let aimY = 0;
 
-/** Fires a volley at the nearest enemies whenever the weapon is ready. */
+/** Fires (or swings) at the nearest enemies whenever the weapon is ready. */
 export function updateWeapon(state: SimState): void {
   const w = state.weapon;
   w.timer -= DT;
@@ -57,22 +66,78 @@ export function updateWeapon(state: SimState): void {
   }
   w.timer += w.cooldown;
 
+  const b = state.build;
+  if (b.bloodPrice && p.hp > 1) p.hp = Math.max(1, p.hp - 1);
+
   for (let n = 0; n < w.projectilesPerVolley; n++) {
-    const t = targetIdx[n % found]!;
-    let dx = e.x[t]! - p.x;
-    let dy = e.y[t]! - p.y;
-    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    dx /= len;
-    dy /= len;
-    state.projectiles.spawn(
-      p.x,
-      p.y,
-      dx * w.projectileSpeed,
-      dy * w.projectileSpeed,
-      w.damage,
-      w.projectileRadius,
-      w.projectileLife,
-      w.pierce,
-    );
+    fireAt(state, targetIdx[n % found]!, 0);
+    state.shots++;
+    if (b.echoEvery > 0 && state.shots % b.echoEvery === 0) {
+      // Echo: a duplicate toward the next target (or slightly off to the side if there's only one).
+      fireAt(state, targetIdx[(n + 1) % found]!, found === 1 ? 0.35 : 0);
+    }
+  }
+}
+
+/** Aims at enemy `t`, adds any extra angle and jitter, then fires or swings. */
+function fireAt(state: SimState, t: number, extraAngle: number): void {
+  const w = state.weapon;
+  const p = state.player;
+  const e = state.enemies;
+  let dx = e.x[t]! - p.x;
+  let dy = e.y[t]! - p.y;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  aimX = dx / len;
+  aimY = dy / len;
+  if (extraAngle !== 0) rotate(extraAngle);
+  if (state.build.spread > 0) rotate((state.playerRng() - 0.5) * 2 * state.build.spread);
+  dx = aimX;
+  dy = aimY;
+
+  if (w.melee) {
+    swing(state, dx, dy);
+    return;
+  }
+  state.projectiles.spawn(
+    p.x,
+    p.y,
+    dx * w.projectileSpeed,
+    dy * w.projectileSpeed,
+    w.damage,
+    w.projectileRadius,
+    w.projectileLife,
+    w.pierce,
+  );
+}
+
+/** Small-angle rotation of the scratch aim direction (a is in radians, kept small and exact). */
+function rotate(a: number): void {
+  const nx = aimX - aimY * a;
+  const ny = aimY + aimX * a;
+  const l = Math.sqrt(nx * nx + ny * ny) || 1;
+  aimX = nx / l;
+  aimY = ny / l;
+}
+
+/** Melee strike: hits every enemy inside a circle in front of the player, once. */
+function swing(state: SimState, dx: number, dy: number): void {
+  const w = state.weapon;
+  const p = state.player;
+  const e = state.enemies;
+  const cx = p.x + dx * w.meleeOffset;
+  const cy = p.y + dy * w.meleeOffset;
+  state.events.push({ type: 'slash', x: cx, y: cy, dx, dy, radius: w.meleeRadius });
+
+  const buf = state.nearby;
+  const n = state.grid.query(cx, cy, w.meleeRadius + MAX_ENEMY_RADIUS, buf);
+  for (let k = 0; k < n; k++) {
+    const j = buf[k]!;
+    if (e.dead[j]) continue;
+    const ex = e.x[j]! - cx;
+    const ey = e.y[j]! - cy;
+    const reach = w.meleeRadius + e.radius[j]!;
+    if (ex * ex + ey * ey > reach * reach) continue;
+    damageEnemy(state, j, w.damage);
+    applyHitEffects(state, j, dx, dy, w.damage);
   }
 }

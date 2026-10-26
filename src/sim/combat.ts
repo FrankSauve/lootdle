@@ -1,4 +1,5 @@
 import { ARENA_HEIGHT, ARENA_WIDTH, DT } from './config.ts';
+import { applyHitEffects, explode, onEnemyKilled } from './effects.ts';
 import { ENEMY_DEFS, EnemyKind, MAX_ENEMY_RADIUS } from './enemies.ts';
 import type { SimState } from './state.ts';
 
@@ -89,13 +90,17 @@ export function updateProjectiles(state: SimState): void {
     const n = state.grid.query(x, y, r + MAX_ENEMY_RADIUS, buf);
     for (let k = 0; k < n; k++) {
       const j = buf[k]!;
-      if (e.dead[j] || e.id[j] === pr.lastHitId[i]) continue;
+      if (e.dead[j] || e.id[j] === pr.lastHitId[i] || e.id[j] === pr.lastHitId2[i]) continue;
       const dx = e.x[j]! - x;
       const dy = e.y[j]! - y;
       const hitDist = r + e.radius[j]!;
       if (dx * dx + dy * dy > hitDist * hitDist) continue;
 
-      damageEnemy(state, j, pr.damage[i]!);
+      const dmg = pr.damage[i]!;
+      damageEnemy(state, j, dmg);
+      const speed = Math.sqrt(pr.vx[i]! * pr.vx[i]! + pr.vy[i]! * pr.vy[i]!) || 1;
+      applyHitEffects(state, j, pr.vx[i]! / speed, pr.vy[i]! / speed, dmg);
+      pr.lastHitId2[i] = pr.lastHitId[i]!;
       pr.lastHitId[i] = e.id[j]!;
       if (pr.pierce[i]! <= 0) {
         pr.dead[i] = 1;
@@ -106,12 +111,13 @@ export function updateProjectiles(state: SimState): void {
   }
 }
 
-export function damageEnemy(state: SimState, i: number, amount: number): void {
+/** Damages enemy `i`. `flash: false` is for damage-over-time, which shouldn't strobe the sprite. */
+export function damageEnemy(state: SimState, i: number, amount: number, flash = true): void {
   const e = state.enemies;
   if (e.dead[i]) return;
   const dealt = Math.min(amount, e.hp[i]!);
   e.hp[i] = e.hp[i]! - amount;
-  e.flash[i] = HIT_FLASH_SECONDS;
+  if (flash) e.flash[i] = HIT_FLASH_SECONDS;
   state.stats.damageDealt += dealt;
   if (e.hp[i]! <= 0) killEnemy(state, i);
 }
@@ -141,6 +147,8 @@ function killEnemy(state: SimState, i: number): void {
     e.spawn(EnemyKind.Slimelet, x - o, y + o, hpMul * 0.5, dmgMul);
     e.spawn(EnemyKind.Slimelet, x + o, y + o, hpMul * 0.5, dmgMul);
   }
+
+  onEnemyKilled(state, x, y);
 }
 
 /** Contact damage from enemies touching the player, with brief invulnerability after each hit. */
@@ -165,12 +173,25 @@ export function updatePlayerContact(state: SimState): void {
   }
   if (worst <= 0) return;
 
+  const b = state.build;
   p.invulnerable = PLAYER_INVULNERABLE_SECONDS;
-  state.events.push({ type: 'playerHit', damage: worst });
-  if (state.godMode) return;
 
-  p.hp = Math.max(0, p.hp - worst);
-  state.stats.damageTaken += worst;
+  // A ready barrier soaks the whole hit.
+  let taken = worst * b.damageTakenMul;
+  if (b.barrierCooldown > 0 && state.barrierTimer <= 0) {
+    state.barrierTimer = b.barrierCooldown;
+    state.events.push({ type: 'blocked' });
+    taken = 0;
+  } else {
+    state.events.push({ type: 'playerHit', damage: taken });
+  }
+
+  // Thorns retaliate whether or not the hit got through.
+  if (b.thornsDamage > 0) explode(state, p.x, p.y, b.thornsRadius, b.thornsDamage);
+
+  if (state.godMode || taken <= 0) return;
+  p.hp = Math.max(0, p.hp - taken);
+  state.stats.damageTaken += taken;
 }
 
 export function updateFlashes(state: SimState): void {

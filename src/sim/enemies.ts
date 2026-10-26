@@ -53,6 +53,11 @@ export class EnemyPool {
   readonly damage: Float64Array;
   /** Seconds of hit-flash remaining (drives the white flash when an enemy is hit). */
   readonly flash: Float64Array;
+  /** Poison / burn damage-over-time: seconds left and damage per second. */
+  readonly poisonT: Float64Array;
+  readonly poisonDps: Float64Array;
+  readonly burnT: Float64Array;
+  readonly burnDps: Float64Array;
 
   constructor(capacity = MAX_ENEMIES) {
     this.capacity = capacity;
@@ -69,6 +74,10 @@ export class EnemyPool {
     this.radius = new Float64Array(capacity);
     this.damage = new Float64Array(capacity);
     this.flash = new Float64Array(capacity);
+    this.poisonT = new Float64Array(capacity);
+    this.poisonDps = new Float64Array(capacity);
+    this.burnT = new Float64Array(capacity);
+    this.burnDps = new Float64Array(capacity);
   }
 
   /** Adds an enemy and returns its index, or -1 when the pool is full. */
@@ -86,6 +95,7 @@ export class EnemyPool {
     this.radius[i] = def.radius;
     this.damage[i] = def.damage * damageMul;
     this.flash[i] = 0;
+    this.poisonT[i] = this.poisonDps[i] = this.burnT[i] = this.burnDps[i] = 0;
     return i;
   }
 
@@ -108,6 +118,10 @@ export class EnemyPool {
         this.radius[w] = this.radius[r]!;
         this.damage[w] = this.damage[r]!;
         this.flash[w] = this.flash[r]!;
+        this.poisonT[w] = this.poisonT[r]!;
+        this.poisonDps[w] = this.poisonDps[r]!;
+        this.burnT[w] = this.burnT[r]!;
+        this.burnDps[w] = this.burnDps[r]!;
       }
       w++;
     }

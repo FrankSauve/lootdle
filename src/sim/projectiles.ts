@@ -20,6 +20,8 @@ export class ProjectilePool {
   readonly pierce: Int32Array;
   /** Id of the last enemy hit, so a piercing projectile doesn't hit the same enemy every tick. */
   readonly lastHitId: Uint32Array;
+  /** The hit before that, so a piercing projectile overlapping two enemies doesn't ping-pong. */
+  readonly lastHitId2: Uint32Array;
 
   constructor(capacity = MAX_PROJECTILES) {
     this.capacity = capacity;
@@ -35,6 +37,7 @@ export class ProjectilePool {
     this.life = new Float64Array(capacity);
     this.pierce = new Int32Array(capacity);
     this.lastHitId = new Uint32Array(capacity);
+    this.lastHitId2 = new Uint32Array(capacity);
   }
 
   spawn(
@@ -59,6 +62,7 @@ export class ProjectilePool {
     this.life[i] = life;
     this.pierce[i] = pierce;
     this.lastHitId[i] = 0;
+    this.lastHitId2[i] = 0;
     return i;
   }
 
@@ -79,6 +83,7 @@ export class ProjectilePool {
         this.life[w] = this.life[r]!;
         this.pierce[w] = this.pierce[r]!;
         this.lastHitId[w] = this.lastHitId[r]!;
+        this.lastHitId2[w] = this.lastHitId2[r]!;
       }
       w++;
     }

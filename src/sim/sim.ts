@@ -16,26 +16,36 @@ import {
   updateProjectiles,
 } from './combat.ts';
 import { ARENA_HEIGHT, ARENA_WIDTH, DT, GRID_CELL_SIZE, MAX_ENEMIES } from './config.ts';
+import { compileBuild } from './build.ts';
 import { updateDirector } from './director.ts';
+import { tickBuild, tickStatuses } from './effects.ts';
 import { EnemyPool } from './enemies.ts';
 import { SpatialGrid } from './grid.ts';
+import { generateLoadout } from './loot.ts';
+import type { Loadout } from './loot.ts';
 import { ProjectilePool } from './projectiles.ts';
 import { createRng } from './rng.ts';
 import type { MoveInput, SimState } from './state.ts';
-import { createThrowingKnives, updateWeapon } from './weapons.ts';
+import { createWeapon, updateWeapon } from './weapons.ts';
 
 export * from './config.ts';
 export type { MoveInput, SimEvent, SimState } from './state.ts';
+export type { Loadout } from './loot.ts';
+export { generateLoadout } from './loot.ts';
 
 export interface SimOptions {
   /** Seed for the shared daily schedule (derived from the date). */
   worldSeed: number;
   /** Seed for this player's loot and upgrades. */
   playerSeed: number;
+  /** Override the rolled loadout (tests); by default it is rolled from `playerSeed`. */
+  loadout?: Loadout;
   godMode?: boolean;
 }
 
 export function createSim(options: SimOptions): SimState {
+  const loadout = options.loadout ?? generateLoadout(options.playerSeed);
+  const build = compileBuild(loadout);
   return {
     tick: 0,
     over: false,
@@ -43,22 +53,31 @@ export function createSim(options: SimOptions): SimState {
     godMode: options.godMode ?? false,
     worldRng: createRng(options.worldSeed),
     playerRng: createRng(options.playerSeed),
+    loadout,
+    build,
     player: {
       x: ARENA_WIDTH / 2,
       y: ARENA_HEIGHT / 2,
       prevX: ARENA_WIDTH / 2,
       prevY: ARENA_HEIGHT / 2,
       radius: 14,
-      speed: 240,
-      hp: 100,
-      maxHp: 100,
+      speed: build.moveSpeed,
+      hp: build.maxHp,
+      maxHp: build.maxHp,
       invulnerable: 0,
     },
-    weapon: createThrowingKnives(),
+    weapon: createWeapon(build, loadout.weapon.name),
     enemies: new EnemyPool(),
     projectiles: new ProjectilePool(),
     grid: new SpatialGrid(ARENA_WIDTH, ARENA_HEIGHT, GRID_CELL_SIZE, MAX_ENEMIES),
     nearby: new Int32Array(MAX_ENEMIES),
+    shots: 0,
+    killsSinceHeal: 0,
+    barrierTimer: 0,
+    explosionsThisTick: 0,
+    effectDepth: 0,
+    blastBufs: [0, 1, 2].map(() => new Int32Array(MAX_ENEMIES)),
+    zapBuf: new Int32Array(MAX_ENEMIES),
     spawnBudget: 0,
     bossesSpawned: 0,
     stats: { kills: 0, bossesDefeated: 0, damageDealt: 0, damageTaken: 0 },
@@ -74,9 +93,12 @@ export function elapsedSeconds(state: SimState): number {
 export function stepSim(state: SimState, input: MoveInput): void {
   if (state.over) return;
   state.events.length = 0;
+  state.explosionsThisTick = 0;
+  state.effectDepth = 0;
 
   savePreviousPositions(state);
   movePlayer(state, input);
+  tickBuild(state);
 
   updateDirector(state);
   moveEnemies(state);
@@ -87,6 +109,7 @@ export function stepSim(state: SimState, input: MoveInput): void {
 
   updateWeapon(state);
   updateProjectiles(state);
+  tickStatuses(state);
   updatePlayerContact(state);
   updateFlashes(state);
 

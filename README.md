@@ -57,3 +57,15 @@ docker compose exec dev npm run sim:check
 
 It runs the same seeded run twice and fails if the results differ, then runs a 6-minute
 invulnerable load test and reports entity counts and simulation cost per tick.
+
+## Daily loot
+
+Every player gets one weapon, one armor and one trinket per day, rolled from a seed
+(`hash(date + player id)`), so a refresh never rerolls it. Items are assembled from parts:
+base archetype + effects (poison, burn, shock, knockback, lifesteal, explosion, thorns, barrier,
+echo, ...) + an optional drawback. The pieces live in `src/sim/items.ts`, the roller in
+`src/sim/loot.ts`, and `src/sim/build.ts` compiles a loadout into the numbers the sim uses.
+
+- Preview someone else's loot: open `http://localhost:5173/?player=anything`.
+- `npm run sim:check` also checks loot determinism, the rarity mix, and that rarity doesn't
+  decide survival on its own.

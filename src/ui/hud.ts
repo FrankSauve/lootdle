@@ -1,5 +1,8 @@
+import { RARITY_COLORS, RARITY_NAMES } from '../sim/items.ts';
 import type { SimState } from '../sim/sim.ts';
 import { elapsedSeconds } from '../sim/sim.ts';
+import type { Loadout } from '../sim/sim.ts';
+import { cssColor, itemIconCanvas } from './lootPanel.ts';
 
 export function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -20,7 +23,6 @@ export class Hud {
   private readonly kills: HTMLElement;
   private readonly bosses: HTMLElement;
   private readonly banner: HTMLElement;
-  private readonly prompt: HTMLElement;
   private readonly results: HTMLElement;
   private bannerTimeout = 0;
   private last = { time: '', hp: -1, kills: -1, bosses: -1 };
@@ -34,6 +36,7 @@ export class Hud {
       </div>
       <div class="hud-timer">00:00.00</div>
       <div class="hud-counters">
+        <span class="hud-gear"></span>
         <span><span class="hud-label">Kills</span> <b class="hud-kills">0</b></span>
         <span><span class="hud-label">Bosses</span> <b class="hud-bosses">0</b></span>
       </div>
@@ -43,10 +46,11 @@ export class Hud {
     this.root = el('div', 'hud');
     this.root.innerHTML = `
       <div class="hud-banner"></div>
-      <div class="hud-prompt">Move with <b>WASD</b> or <b>arrow keys</b> to begin</div>
       <div class="hud-results" hidden>
         <h2>You died</h2>
         <div class="hud-results-time"></div>
+        <div class="hud-results-build"></div>
+        <div class="hud-results-gear"></div>
         <dl class="hud-results-stats"></dl>
         <button type="button" class="hud-restart">Play again <span>(R)</span></button>
       </div>
@@ -59,7 +63,6 @@ export class Hud {
     this.kills = q(this.topBar, '.hud-kills');
     this.bosses = q(this.topBar, '.hud-bosses');
     this.banner = q(this.root, '.hud-banner');
-    this.prompt = q(this.root, '.hud-prompt');
     this.results = q(this.root, '.hud-results');
     q(this.root, '.hud-restart').addEventListener('click', onRestart);
   }
@@ -92,8 +95,19 @@ export class Hud {
     this.bannerTimeout = window.setTimeout(() => this.banner.classList.remove('show'), ms);
   }
 
-  setPromptVisible(visible: boolean): void {
-    this.prompt.hidden = !visible;
+  /** Shows today's three items as small icons in the top bar. */
+  setLoadout(loadout: Loadout): void {
+    const gear = q(this.topBar, '.hud-gear');
+    gear.replaceChildren(
+      ...[loadout.weapon, loadout.armor, loadout.trinket].map((item) => {
+        const slot = document.createElement('span');
+        slot.className = 'hud-gear-slot';
+        slot.style.setProperty('--rarity', cssColor(RARITY_COLORS[item.rarity]));
+        slot.title = `${item.name} (${RARITY_NAMES[item.rarity]})`;
+        slot.appendChild(itemIconCanvas(item, 2));
+        return slot;
+      }),
+    );
   }
 
   showResults(state: SimState): void {
@@ -105,6 +119,17 @@ export class Hud {
       ['Damage dealt', Math.round(s.damageDealt).toLocaleString()],
       ['Damage taken', Math.round(s.damageTaken).toLocaleString()],
     ];
+    const loadout = state.loadout;
+    q(this.results, '.hud-results-build').textContent = loadout.buildName;
+    q(this.results, '.hud-results-gear').replaceChildren(
+      ...[loadout.weapon, loadout.armor, loadout.trinket].map((item) => {
+        const row = document.createElement('div');
+        row.className = 'hud-results-item';
+        row.style.setProperty('--rarity', cssColor(RARITY_COLORS[item.rarity]));
+        row.append(itemIconCanvas(item, 2), document.createTextNode(item.name));
+        return row;
+      }),
+    );
     q(this.results, '.hud-results-stats').innerHTML = rows
       .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
       .join('');
@@ -115,7 +140,6 @@ export class Hud {
     this.results.hidden = true;
     this.banner.classList.remove('show');
     this.last = { time: '', hp: -1, kills: -1, bosses: -1 };
-    this.setPromptVisible(true);
   }
 }
 

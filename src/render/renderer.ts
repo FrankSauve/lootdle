@@ -4,6 +4,7 @@ import { ENEMY_DEFS, EnemyKind } from '../sim/enemies.ts';
 import { ARENA_HEIGHT, ARENA_WIDTH } from '../sim/sim.ts';
 import type { SimEvent, SimState } from '../sim/sim.ts';
 import { generateDungeon } from './art/dungeon.ts';
+import { arcImage, orbImage } from './art/effects.ts';
 import { silhouette } from './art/pixels.ts';
 import { buildArtCatalog } from './art/sprites.ts';
 import type { SpriteArt } from './art/sprites.ts';
@@ -39,6 +40,38 @@ const KIND_DEBRIS: Record<EnemyKind, readonly number[]> = {
   [EnemyKind.GiantSlime]: [0x3fbf5a, 0x6fd36a, 0xffc94a, 0x2a7a3a],
 };
 
+/** Projectiles up to this radius are drawn as thrown blades/arrows, bigger ones as orbs. */
+const BLADE_MAX_RADIUS = 8;
+const ORB_DIAMETER = 18;
+const EXPLOSION_COLORS = [0xffc94a, 0xff8a2b, 0xff4d2b, 0xfff6c0];
+const HEAL_COLORS = [0x62d96b, 0xb6f5b0, 0xffffff];
+const BLOCK_COLORS = [0x4da6ff, 0xb6dcff, 0xffffff];
+const POISON_TINT = 0xa8ff9a;
+const BURN_TINT = 0xffb070;
+const BOTH_TINT = 0xd8d868;
+
+interface Ring {
+  x: number;
+  y: number;
+  radius: number;
+  life: number;
+  maxLife: number;
+  color: number;
+}
+interface Bolt {
+  x: number;
+  y: number;
+  toX: number;
+  toY: number;
+  life: number;
+  midX: number;
+  midY: number;
+}
+interface Slash {
+  sprite: Sprite;
+  life: number;
+}
+
 const TORCH_GLOW = 0xff9a3c;
 const DOOM_TORCH_GLOW = 0xff3b3b;
 const DOOM_TINT = 0xffb0b0;
@@ -68,6 +101,14 @@ export class GameRenderer {
   private readonly playerArt: AnimatedTextures;
   private readonly torchFrames: Texture[];
   private readonly knifeTexture: Texture;
+  private readonly orbTexture: Texture;
+  private readonly arcTextures = new Map<number, Texture>();
+  private readonly rings: Ring[] = [];
+  private readonly bolts: Bolt[] = [];
+  private readonly slashes: Slash[] = [];
+  private readonly slashLayer = new Container();
+  private playerX = 0;
+  private playerY = 0;
 
   private readonly enemySprites: Sprite[] = [];
   private readonly enemyShadows: Sprite[] = [];
@@ -101,6 +142,7 @@ export class GameRenderer {
     };
     this.torchFrames = art.torch.map(pixelTexture);
     this.knifeTexture = pixelTexture(art.knife);
+    this.orbTexture = pixelTexture(orbImage(ORB_DIAMETER));
 
     // Static dungeon backdrop (floor + walls), drawn once.
     const dungeon = generateDungeon(ARENA_WIDTH * ART_SCALE, ARENA_HEIGHT * ART_SCALE, WALL, DUNGEON_SEED);
@@ -139,6 +181,7 @@ export class GameRenderer {
       this.enemyLayer,
       this.player,
       this.projectileLayer,
+      this.slashLayer,
       this.particles.container,
       this.overlay,
     );
@@ -164,6 +207,10 @@ export class GameRenderer {
     this.setDoom(false);
     this.particles.clear();
     this.shake = 0;
+    this.rings.length = 0;
+    this.bolts.length = 0;
+    for (const s of this.slashes) this.slashLayer.removeChild(s.sprite);
+    this.slashes.length = 0;
   }
 
   /** Turns simulation events into effects. Call once per simulated tick with that tick's events. */
@@ -177,6 +224,32 @@ export class GameRenderer {
         }
         case 'bossDefeated':
           this.shake = Math.max(this.shake, 5);
+          break;
+        case 'explosion':
+          this.particles.burst(ev.x, ev.y, EXPLOSION_COLORS, 6 + Math.round(ev.radius / 10), 240);
+          this.rings.push({ x: ev.x, y: ev.y, radius: ev.radius, life: 0.22, maxLife: 0.22, color: 0xffc94a });
+          this.shake = Math.max(this.shake, 1.5);
+          break;
+        case 'zap':
+          this.bolts.push({
+            x: ev.x,
+            y: ev.y,
+            toX: ev.toX,
+            toY: ev.toY,
+            life: 0.12,
+            midX: (ev.x + ev.toX) / 2 + (Math.random() - 0.5) * 30,
+            midY: (ev.y + ev.toY) / 2 + (Math.random() - 0.5) * 30,
+          });
+          break;
+        case 'slash':
+          this.addSlash(ev.x, ev.y, ev.dx, ev.dy, ev.radius);
+          break;
+        case 'heal':
+          this.particles.burst(this.playerX, this.playerY - 10, HEAL_COLORS, 6, 120);
+          break;
+        case 'blocked':
+          this.particles.burst(this.playerX, this.playerY, BLOCK_COLORS, 14, 220);
+          this.rings.push({ x: this.playerX, y: this.playerY, radius: 40, life: 0.25, maxLife: 0.25, color: 0x4da6ff });
           break;
         case 'playerHit':
           this.shake = Math.max(this.shake, 3);
@@ -205,6 +278,8 @@ export class GameRenderer {
     const p = state.player;
     const px = lerp(p.prevX, p.x, alpha);
     const py = lerp(p.prevY, p.y, alpha);
+    this.playerX = px;
+    this.playerY = py;
     const moving = p.x !== p.prevX || p.y !== p.prevY;
     if (p.x > p.prevX) this.facing = 1;
     else if (p.x < p.prevX) this.facing = -1;
@@ -239,6 +314,12 @@ export class GameRenderer {
 
       s.visible = sh.visible = true;
       s.texture = (e.flash[i]! > 0 ? tex.flash : tex.frames)[frame]!;
+      const poisoned = e.poisonT[i]! > 0;
+      const burning = e.burnT[i]! > 0;
+      s.tint = poisoned && burning ? BOTH_TINT : poisoned ? POISON_TINT : burning ? BURN_TINT : 0xffffff;
+      if ((poisoned || burning) && Math.random() < frameSeconds * 3) {
+        this.particles.burst(x, y - 4, burning ? [0xff6a2b, 0xffc94a] : [0x5fd35f, 0xb6f5b0], 1, 50);
+      }
       s.position.set(x, y + lift);
       s.scale.set(PX);
       sh.texture = tex.shadow;
@@ -256,11 +337,70 @@ export class GameRenderer {
       }
       s.visible = true;
       s.position.set(lerp(pr.prevX[i]!, pr.x[i]!, alpha), lerp(pr.prevY[i]!, pr.y[i]!, alpha));
-      s.rotation = Math.atan2(pr.vy[i]!, pr.vx[i]!);
+      const radius = pr.radius[i]!;
+      if (radius <= BLADE_MAX_RADIUS) {
+        s.texture = this.knifeTexture;
+        s.scale.set(PX);
+        s.rotation = Math.atan2(pr.vy[i]!, pr.vx[i]!);
+      } else {
+        s.texture = this.orbTexture;
+        s.scale.set((radius * 2) / ORB_DIAMETER);
+        s.rotation = 0;
+      }
     }
 
     this.drawBossBars(state, alpha);
+    this.drawEffects(frameSeconds);
     this.particles.update(frameSeconds);
+  }
+
+  private addSlash(x: number, y: number, dx: number, dy: number, radius: number): void {
+    const artRadius = Math.max(4, Math.round((radius / PX) * 1));
+    let tex = this.arcTextures.get(artRadius);
+    if (!tex) {
+      tex = pixelTexture(arcImage(artRadius));
+      this.arcTextures.set(artRadius, tex);
+    }
+    const sprite = this.makeSprite(tex);
+    sprite.position.set(x, y);
+    sprite.rotation = Math.atan2(dy, dx);
+    this.slashLayer.addChild(sprite);
+    this.slashes.push({ sprite, life: 0.14 });
+  }
+
+  /** Short-lived effects: expanding rings, lightning bolts and melee slashes. */
+  private drawEffects(frameSeconds: number): void {
+    const g = this.overlay;
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const r = this.rings[i]!;
+      r.life -= frameSeconds;
+      if (r.life <= 0) {
+        this.rings.splice(i, 1);
+        continue;
+      }
+      const t = 1 - r.life / r.maxLife;
+      g.circle(r.x, r.y, r.radius * (0.35 + 0.65 * t)).stroke({ width: PX * 2, color: r.color });
+    }
+    for (let i = this.bolts.length - 1; i >= 0; i--) {
+      const b = this.bolts[i]!;
+      b.life -= frameSeconds;
+      if (b.life <= 0) {
+        this.bolts.splice(i, 1);
+        continue;
+      }
+      g.moveTo(b.x, b.y).lineTo(b.midX, b.midY).lineTo(b.toX, b.toY).stroke({ width: PX * 2, color: 0xfff6c0 });
+      g.moveTo(b.x, b.y).lineTo(b.midX, b.midY).lineTo(b.toX, b.toY).stroke({ width: PX, color: 0xffe14a });
+    }
+    for (let i = this.slashes.length - 1; i >= 0; i--) {
+      const s = this.slashes[i]!;
+      s.life -= frameSeconds;
+      if (s.life <= 0) {
+        this.slashLayer.removeChild(s.sprite);
+        this.slashes.splice(i, 1);
+        continue;
+      }
+      s.sprite.alpha = s.life > 0.06 ? 1 : 0.5;
+    }
   }
 
   private setDoom(doom: boolean): void {
