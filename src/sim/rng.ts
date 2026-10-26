@@ -3,7 +3,9 @@
  * The simulation must never call Math.random(): every random choice comes from a seeded stream
  * so a run can be replayed and validated on the server.
  */
-export function createRng(seed: number): () => number {
+export type Rng = () => number;
+
+export function createRng(seed: number): Rng {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;

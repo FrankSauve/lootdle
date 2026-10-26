@@ -6,45 +6,117 @@
  * - Use +, -, *, / and Math.sqrt freely; they are exact IEEE operations in every browser.
  * - Avoid Math.sin/cos/atan2/exp/pow/hypot: their results can differ between JS engines.
  *   Add deterministic helpers (lookup tables or fixed-point) when they are needed.
+ * - All randomness comes from state.worldRng (shared daily schedule) or state.playerRng (loot).
  */
-import { createRng } from './rng';
+import {
+  updateFlashes,
+  moveEnemies,
+  separateEnemies,
+  updatePlayerContact,
+  updateProjectiles,
+} from './combat.ts';
+import { ARENA_HEIGHT, ARENA_WIDTH, DT, GRID_CELL_SIZE, MAX_ENEMIES } from './config.ts';
+import { updateDirector } from './director.ts';
+import { EnemyPool } from './enemies.ts';
+import { SpatialGrid } from './grid.ts';
+import { ProjectilePool } from './projectiles.ts';
+import { createRng } from './rng.ts';
+import type { MoveInput, SimState } from './state.ts';
+import { createThrowingKnives, updateWeapon } from './weapons.ts';
 
-export const TICK_RATE = 60;
-export const DT = 1 / TICK_RATE;
+export * from './config.ts';
+export type { MoveInput, SimEvent, SimState } from './state.ts';
 
-export const ARENA_WIDTH = 1600;
-export const ARENA_HEIGHT = 900;
-
-/** Movement intent for one tick; each axis in the range -1..1. */
-export interface MoveInput {
-  x: number;
-  y: number;
+export interface SimOptions {
+  /** Seed for the shared daily schedule (derived from the date). */
+  worldSeed: number;
+  /** Seed for this player's loot and upgrades. */
+  playerSeed: number;
+  godMode?: boolean;
 }
 
-export interface PlayerState {
-  x: number;
-  y: number;
-  radius: number;
-  speed: number; // units per second
-}
-
-export interface SimState {
-  tick: number;
-  rng: () => number;
-  player: PlayerState;
-}
-
-export function createSim(seed: number): SimState {
+export function createSim(options: SimOptions): SimState {
   return {
     tick: 0,
-    rng: createRng(seed),
-    player: { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT / 2, radius: 16, speed: 260 },
+    over: false,
+    doom: false,
+    godMode: options.godMode ?? false,
+    worldRng: createRng(options.worldSeed),
+    playerRng: createRng(options.playerSeed),
+    player: {
+      x: ARENA_WIDTH / 2,
+      y: ARENA_HEIGHT / 2,
+      prevX: ARENA_WIDTH / 2,
+      prevY: ARENA_HEIGHT / 2,
+      radius: 14,
+      speed: 240,
+      hp: 100,
+      maxHp: 100,
+      invulnerable: 0,
+    },
+    weapon: createThrowingKnives(),
+    enemies: new EnemyPool(),
+    projectiles: new ProjectilePool(),
+    grid: new SpatialGrid(ARENA_WIDTH, ARENA_HEIGHT, GRID_CELL_SIZE, MAX_ENEMIES),
+    nearby: new Int32Array(MAX_ENEMIES),
+    spawnBudget: 0,
+    bossesSpawned: 0,
+    stats: { kills: 0, bossesDefeated: 0, damageDealt: 0, damageTaken: 0 },
+    events: [],
   };
 }
 
-export function stepSim(state: SimState, input: MoveInput): void {
-  const p = state.player;
+/** Seconds survived so far. */
+export function elapsedSeconds(state: SimState): number {
+  return state.tick * DT;
+}
 
+export function stepSim(state: SimState, input: MoveInput): void {
+  if (state.over) return;
+  state.events.length = 0;
+
+  savePreviousPositions(state);
+  movePlayer(state, input);
+
+  updateDirector(state);
+  moveEnemies(state);
+
+  const e = state.enemies;
+  state.grid.build(e.x, e.y, e.count);
+  separateEnemies(state);
+
+  updateWeapon(state);
+  updateProjectiles(state);
+  updatePlayerContact(state);
+  updateFlashes(state);
+
+  e.compact();
+  state.projectiles.compact();
+
+  state.tick++;
+
+  if (state.player.hp <= 0) {
+    state.over = true;
+    state.events.push({ type: 'playerDied' });
+  }
+}
+
+function savePreviousPositions(state: SimState): void {
+  const p = state.player;
+  p.prevX = p.x;
+  p.prevY = p.y;
+
+  const e = state.enemies;
+  e.prevX.set(e.x.subarray(0, e.count));
+  e.prevY.set(e.y.subarray(0, e.count));
+
+  const pr = state.projectiles;
+  pr.prevX.set(pr.x.subarray(0, pr.count));
+  pr.prevY.set(pr.y.subarray(0, pr.count));
+}
+
+function movePlayer(state: SimState, input: MoveInput): void {
+  const p = state.player;
   let dx = input.x;
   let dy = input.y;
   const len = Math.sqrt(dx * dx + dy * dy);
@@ -52,11 +124,8 @@ export function stepSim(state: SimState, input: MoveInput): void {
     dx /= len;
     dy /= len;
   }
-
   p.x = clamp(p.x + dx * p.speed * DT, p.radius, ARENA_WIDTH - p.radius);
   p.y = clamp(p.y + dy * p.speed * DT, p.radius, ARENA_HEIGHT - p.radius);
-
-  state.tick++;
 }
 
 function clamp(v: number, min: number, max: number): number {

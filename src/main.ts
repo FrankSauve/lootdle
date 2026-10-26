@@ -1,68 +1,80 @@
-import { Application, Container, Graphics } from 'pixi.js';
-import { createKeyboardInput } from './input/keyboard';
-import { hashSeed } from './sim/rng';
-import { ARENA_HEIGHT, ARENA_WIDTH, DT, createSim, stepSim } from './sim/sim';
+import { Application } from 'pixi.js';
+import './style.css';
+import { createKeyboardInput } from './input/keyboard.ts';
+import { GameRenderer } from './render/renderer.ts';
+import { hashSeed } from './sim/rng.ts';
+import { DT, createSim, stepSim } from './sim/sim.ts';
+import type { SimState } from './sim/sim.ts';
+import { Hud } from './ui/hud.ts';
 
-/** Never run more than this much simulated time in one frame (e.g. after the tab was hidden). */
+/** Never simulate more than this much time in one frame (e.g. after a long hitch). */
 const MAX_FRAME_SECONDS = 0.25;
 
 async function main() {
+  const container = document.getElementById('app')!;
   const app = new Application();
-  await app.init({ resizeTo: window, background: '#14101c', antialias: true });
-  document.getElementById('app')!.appendChild(app.canvas);
+  await app.init({ resizeTo: container, background: '#14101c', antialias: true });
+  container.appendChild(app.canvas);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const sim = createSim(hashSeed(today));
   const input = createKeyboardInput();
+  const renderer = new GameRenderer(app);
 
-  // Rendering only reads simulation state; it never changes it.
-  const world = new Container();
-  app.stage.addChild(world);
+  // Shared daily schedule (UTC date) + a per-session player seed until accounts/loot exist.
+  const today = new Date().toISOString().slice(0, 10);
+  const worldSeed = hashSeed(`lootdle:${today}`);
 
-  const arena = new Graphics()
-    .rect(0, 0, ARENA_WIDTH, ARENA_HEIGHT)
-    .fill(0x1d1728)
-    .stroke({ width: 4, color: 0x3a2f52 });
-  const player = new Graphics().circle(0, 0, sim.player.radius).fill(0xffc94a);
-  world.addChild(arena, player);
-
-  const fitArena = () => {
-    const scale = Math.min(app.screen.width / ARENA_WIDTH, app.screen.height / ARENA_HEIGHT) * 0.95;
-    world.scale.set(scale);
-    world.position.set(
-      (app.screen.width - ARENA_WIDTH * scale) / 2,
-      (app.screen.height - ARENA_HEIGHT * scale) / 2,
-    );
-  };
-  let fittedWidth = 0;
-  let fittedHeight = 0;
-
-  // Fixed-step simulation, rendered with interpolation between the last two ticks.
+  let sim: SimState;
+  let started = false;
+  let resultsShown = false;
   let accumulator = 0;
-  let prevX = sim.player.x;
-  let prevY = sim.player.y;
+
+  const newRun = () => {
+    sim = createSim({ worldSeed, playerSeed: (Math.random() * 2 ** 32) >>> 0 });
+    started = false;
+    resultsShown = false;
+    accumulator = 0;
+    renderer.reset();
+    hud.reset();
+  };
+
+  const hud = new Hud(container, () => newRun());
+  newRun();
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyR' && sim.over) newRun();
+  });
 
   app.ticker.add((ticker) => {
-    if (app.screen.width !== fittedWidth || app.screen.height !== fittedHeight) {
-      fittedWidth = app.screen.width;
-      fittedHeight = app.screen.height;
-      fitArena();
+    const frameSeconds = Math.min(ticker.deltaMS / 1000, MAX_FRAME_SECONDS);
+    const move = input.read();
+
+    // The run (and the clock) starts on the first movement.
+    if (!started && (move.x !== 0 || move.y !== 0)) {
+      started = true;
+      hud.setPromptVisible(false);
     }
 
-    accumulator += Math.min(ticker.deltaMS / 1000, MAX_FRAME_SECONDS);
-
-    while (accumulator >= DT) {
-      prevX = sim.player.x;
-      prevY = sim.player.y;
-      stepSim(sim, input.read());
-      accumulator -= DT;
+    if (started && !sim.over) {
+      accumulator += frameSeconds;
+      while (accumulator >= DT && !sim.over) {
+        stepSim(sim, input.read());
+        accumulator -= DT;
+        renderer.handleEvents(sim.events);
+        for (const ev of sim.events) {
+          if (ev.type === 'bossSpawned') hud.showBanner(`👑 ${ev.name} #${ev.number} appears`, 'boss');
+          else if (ev.type === 'bossDefeated') hud.showBanner(`${ev.name} defeated!`, 'boss', 1400);
+          else if (ev.type === 'doom') hud.showBanner('Doom has awakened', 'doom', 3000);
+        }
+      }
     }
 
-    const alpha = accumulator / DT;
-    player.position.set(
-      prevX + (sim.player.x - prevX) * alpha,
-      prevY + (sim.player.y - prevY) * alpha,
-    );
+    renderer.render(sim, sim.over || !started ? 1 : accumulator / DT, frameSeconds);
+    hud.update(sim);
+
+    if (sim.over && !resultsShown) {
+      resultsShown = true;
+      hud.showResults(sim);
+    }
   });
 }
 

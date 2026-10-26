@@ -1,4 +1,4 @@
-import type { MoveInput } from '../sim/sim';
+import type { MoveInput } from '../sim/sim.ts';
 
 const LEFT = ['KeyA', 'ArrowLeft'];
 const RIGHT = ['KeyD', 'ArrowRight'];

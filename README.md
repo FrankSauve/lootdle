@@ -26,12 +26,34 @@ reset it with `docker compose down -v`.
 
 ```
 src/
-  main.ts          bootstrap: PixiJS app, fixed-step loop, rendering
-  sim/             pure deterministic simulation (no DOM, no rendering, no Math.random)
-    sim.ts         state + stepSim()
-    rng.ts         seeded PRNG and seed hashing
-  input/           keyboard (and later joystick) -> MoveInput
+  main.ts            bootstrap: PixiJS app, fixed-step loop, wiring sim -> renderer -> HUD
+  style.css          HUD styles
+  sim/               pure deterministic simulation (no DOM, no rendering, no Math.random)
+    sim.ts           createSim() / stepSim(): the order of systems in one tick
+    config.ts        tick rate, arena size, entity budgets, boss/Doom timing
+    state.ts         SimState, player, weapon, stats and SimEvent types
+    enemies.ts       enemy definitions and struct-of-arrays EnemyPool
+    projectiles.ts   struct-of-arrays ProjectilePool
+    grid.ts          spatial grid for neighbour queries
+    director.ts      spawn schedule, bosses every 20 s, Doom at 2:00, difficulty curves
+    combat.ts        enemy movement, separation, projectile hits, kills, contact damage
+    weapons.ts       starting weapon and auto-targeting
+    rng.ts           seeded PRNG and seed hashing
+  render/            PixiJS drawing: sprite pools, interpolation, particles, screen shake
+  ui/hud.ts          DOM overlay: timer, HP, counters, banners, results screen
+  input/             keyboard (and later joystick) -> MoveInput
+scripts/
+  sim-check.ts       headless determinism, survival and load test
 ```
 
 The simulation runs at a fixed 60 ticks per second and the renderer interpolates between ticks.
 Keep `src/sim` pure and deterministic so runs can be replayed and validated on a server later.
+
+Check the simulation without a browser:
+
+```sh
+docker compose exec dev npm run sim:check
+```
+
+It runs the same seeded run twice and fails if the results differ, then runs a 6-minute
+invulnerable load test and reports entity counts and simulation cost per tick.
