@@ -111,6 +111,10 @@ export class Hud {
     this.bannerTimeout = window.setTimeout(() => this.banner.classList.remove('show'), ms);
   }
 
+  clearLoadout(): void {
+    q(this.topBar, '.hud-gear').replaceChildren();
+  }
+
   /** Shows today's three items as small icons in the top bar. */
   setLoadout(loadout: Loadout): void {
     const gear = q(this.topBar, '.hud-gear');

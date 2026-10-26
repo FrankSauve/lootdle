@@ -646,6 +646,119 @@ body {
   font-weight: normal;
 }
 
+/* Slot machine for the first reveal of the day. */
+.slot-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.reel {
+  position: relative;
+  width: min(210px, 100%);
+  height: 132px;
+  overflow: hidden;
+  border: 4px solid var(--panel-edge);
+  background: var(--ink);
+  box-shadow: 0 0 0 4px var(--ink), inset 0 0 24px rgba(0, 0, 0, 0.8);
+}
+
+/* Payline arrows pointing at the middle of the window. */
+.reel::before,
+.reel::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 0;
+  margin-top: -8px;
+  border: 8px solid transparent;
+  z-index: 2;
+}
+.reel::before {
+  left: 0;
+  border-left-color: var(--gold);
+}
+.reel::after {
+  right: 0;
+  border-right-color: var(--gold);
+}
+
+.reel-strip {
+  will-change: transform;
+}
+
+.reel.fast .reel-strip {
+  filter: blur(2px);
+}
+
+.reel-cell {
+  height: 132px;
+  display: grid;
+  place-items: center;
+}
+
+.reel-icon {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border: 4px solid var(--panel-edge);
+  background: #2a2433;
+}
+
+.reel-unknown {
+  font-family: var(--pixel-font);
+  font-size: 48px;
+  color: var(--dim);
+  text-shadow: 4px 4px 0 var(--ink);
+}
+
+.reel.landed {
+  border-color: var(--rarity);
+  animation: reel-land 0.4s steps(4);
+}
+.reel.landed .reel-icon {
+  border-color: var(--rarity);
+  background: var(--ink);
+}
+
+@keyframes reel-land {
+  0% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 4px var(--ink), 0 0 26px 8px var(--rarity);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.loot-spin {
+  display: block;
+  margin: 26px auto 0;
+  padding: 14px 40px;
+  border: 4px solid var(--ink);
+  background: var(--gold);
+  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.3), 0 0 0 4px var(--panel-edge);
+  color: var(--ink);
+  font-family: var(--pixel-font);
+  font-size: 22px;
+  cursor: pointer;
+  animation: blink 1.2s steps(2) infinite;
+}
+.loot-spin:hover {
+  background: #ffe28a;
+}
+.loot-spin:active {
+  transform: translateY(2px);
+}
+
+.loot-overlay.spinning .loot-synergies,
+.loot-overlay.spinning .loot-build {
+  display: none;
+}
+
 /* Debug menu (development only). */
 .debug-toggle {
   position: fixed;

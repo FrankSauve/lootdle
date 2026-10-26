@@ -81,7 +81,8 @@ async function main() {
   let accumulator = 0;
   let revealUnlockAt = 0;
 
-  const newRun = () => {
+  /** `spin` plays the slot machine first; used on first load and when the loot is changed on purpose. */
+  const newRun = (spin = false) => {
     const loadout = debug.loot ?? todaysLoadout;
     sim = createSim({ worldSeed, playerSeed: debug.loot ? debug.loot.seed : playerSeed, loadout, godMode: debug.godMode });
     started = false;
@@ -89,8 +90,13 @@ async function main() {
     accumulator = 0;
     renderer.reset();
     hud.reset();
-    hud.setLoadout(loadout);
-    revealUnlockAt = performance.now() + lootPanel.show(loadout, today);
+    // With the slot machine the gear icons would spoil the result, so they appear once it has landed.
+    if (spin) hud.clearLoadout();
+    else hud.setLoadout(loadout);
+    revealUnlockAt = performance.now() + lootPanel.show(loadout, today, spin, () => {
+      revealUnlockAt = performance.now();
+      hud.setLoadout(loadout);
+    });
   };
 
   const settings = new SettingsStore();
@@ -100,7 +106,7 @@ async function main() {
   const hud = new Hud(container, playfield, () => newRun(), () => settingsWindow.open());
   const lootPanel = new LootPanel(container);
   const settingsWindow = new SettingsWindow(container, settings);
-  newRun();
+  newRun(true);
 
   // Developer tools: loaded only by the Vite dev server, never included in production builds.
   let debugMenu: { update(now: number): void } | null = null;
@@ -126,15 +132,15 @@ async function main() {
       },
       rerollLoot: () => {
         debug.loot = generateLoadout((Math.random() * 2 ** 32) >>> 0);
-        newRun();
+        newRun(true);
       },
       loadPlayerLoot: (name) => {
         debug.loot = generateLoadout(hashSeed(`lootdle:${today}:${name}`));
-        newRun();
+        newRun(true);
       },
       resetLoot: () => {
         debug.loot = null;
-        newRun();
+        newRun(true);
       },
       spawn: (kind, count) => {
         const p = sim.player;

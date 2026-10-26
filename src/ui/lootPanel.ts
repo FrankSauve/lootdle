@@ -1,9 +1,21 @@
 import { itemIcon } from '../render/art/icons.ts';
 import type { PixelImage } from '../render/art/pixels.ts';
-import { RARITY_COLORS, RARITY_NAMES, SYNERGIES } from '../sim/items.ts';
+import { ARMORS, RARITY_COLORS, RARITY_NAMES, SYNERGIES, TRINKETS, WEAPONS } from '../sim/items.ts';
 import type { Item } from '../sim/items.ts';
 import { describeItem } from '../sim/loot.ts';
 import type { Loadout } from '../sim/loot.ts';
+
+/** Height of one reel cell in CSS pixels (keep in sync with .reel-cell in style.css). */
+const CELL_H = 132;
+const POOLS = { weapon: WEAPONS, armor: ARMORS, trinket: TRINKETS } as const;
+/** Reel i spins for this long (ms) before it lands; they land one after another. */
+const reelDuration = (i: number) => 1700 + i * 1000;
+const reelCells = (i: number) => 26 + i * 12;
+const easeOutBack = (p: number) => {
+  const c1 = 0.9;
+  const c3 = c1 + 1;
+  return 1 + c3 * (p - 1) ** 3 + c1 * (p - 1) ** 2;
+};
 
 const SLOT_LABELS = { weapon: 'Weapon', armor: 'Armor', trinket: 'Trinket' } as const;
 
@@ -39,6 +51,9 @@ export class LootPanel {
   private readonly synergies: HTMLElement;
   private readonly go: HTMLElement;
   private readonly date: HTMLElement;
+  /** Bumped whenever the panel is shown or hidden, to cancel a spin in progress. */
+  private token = 0;
+  private spinKey: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(parent: HTMLElement) {
     this.root = document.createElement('div');
@@ -61,9 +76,28 @@ export class LootPanel {
     this.date = this.root.querySelector<HTMLElement>('.loot-date')!;
   }
 
-  /** Shows the reveal and returns how many milliseconds until it has finished playing. */
-  show(loadout: Loadout, dateLabel: string): number {
+  /**
+   * Shows today's loot. Without `spin` the three cards are revealed one after another and the
+   * return value is how many milliseconds that takes. With `spin` the player first gets a slot
+   * machine: they press Spin, the reels land one at a time, and then the cards are revealed;
+   * the return value is Infinity and `onReady` is called once the reveal has finished.
+   */
+  show(loadout: Loadout, dateLabel: string, spin = false, onReady?: () => void): number {
+    this.token++;
+    this.clearSpinKey();
+    this.root.querySelector('.loot-spin')?.remove();
+    this.go.hidden = false;
     this.date.textContent = dateLabel;
+    if (spin) {
+      this.startSlotMachine(loadout, onReady);
+      return Infinity;
+    }
+    return this.revealCards(loadout);
+  }
+
+  /** The cards, synergies, build name and prompt, revealed on a timeline. Returns its length in ms. */
+  private revealCards(loadout: Loadout): number {
+    this.root.classList.remove('spinning');
     this.cards.replaceChildren(
       ...[loadout.weapon, loadout.armor, loadout.trinket].map((item, i) => this.card(item, 0.25 + i * 0.6)),
     );
@@ -96,7 +130,141 @@ export class LootPanel {
     return Math.min(3200, (t + 0.5) * 1000);
   }
 
+  // ---- Slot machine -------------------------------------------------------------------------
+
+  private startSlotMachine(loadout: Loadout, onReady?: () => void): void {
+    const token = this.token;
+    this.root.classList.add('spinning');
+    this.root.dataset['flash'] = '';
+    this.synergies.replaceChildren();
+    this.build.textContent = '';
+
+    const items = [loadout.weapon, loadout.armor, loadout.trinket];
+    const strips: HTMLElement[] = [];
+    const reels: HTMLElement[] = [];
+    const cols = items.map((item, i) => {
+      const col = document.createElement('div');
+      col.className = 'slot-col';
+      const label = document.createElement('div');
+      label.className = 'loot-slot';
+      label.textContent = SLOT_LABELS[item.slot];
+      const reel = document.createElement('div');
+      reel.className = 'reel';
+      const strip = document.createElement('div');
+      strip.className = 'reel-strip';
+
+      // Cell 0 is a question mark, the last cell is the real item, the rest are random decoys.
+      const cells: HTMLElement[] = [];
+      const q = document.createElement('div');
+      q.className = 'reel-cell reel-unknown';
+      q.textContent = '?';
+      cells.push(q);
+      const pool = POOLS[item.slot];
+      for (let k = 1; k < reelCells(i) - 1; k++) {
+        const decoy = pool[Math.floor(Math.random() * pool.length)]!;
+        cells.push(this.reelCell(item.slot, decoy.id, null));
+      }
+      cells.push(this.reelCell(item.slot, item.id, item.rarity));
+      strip.append(...cells);
+      reel.appendChild(strip);
+      col.append(label, reel);
+      strips.push(strip);
+      reels.push(reel);
+      return col;
+    });
+    this.cards.replaceChildren(...cols);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'loot-spin';
+    button.textContent = 'SPIN';
+    this.go.hidden = true;
+    this.cards.after(button);
+
+    const start = () => {
+      if (token !== this.token || button.disabled) return;
+      button.disabled = true;
+      button.remove();
+      this.clearSpinKey();
+      this.spin(token, items, strips, reels, () => {
+        if (token !== this.token) return;
+        const ms = this.revealCards(loadout);
+        this.go.hidden = false;
+        window.setTimeout(() => token === this.token && onReady?.(), Math.min(ms, 3200) - 800);
+      });
+    };
+    button.addEventListener('click', start);
+    this.spinKey = (e) => {
+      const t = e.target;
+      if (t instanceof HTMLInputElement && t.type !== 'checkbox') return;
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        start();
+      }
+    };
+    window.addEventListener('keydown', this.spinKey);
+
+    this.root.hidden = true;
+    void this.root.offsetWidth;
+    this.root.hidden = false;
+  }
+
+  private reelCell(slot: 'weapon' | 'armor' | 'trinket', id: string, rarity: number | null): HTMLElement {
+    const cell = document.createElement('div');
+    cell.className = 'reel-cell';
+    const icon = document.createElement('div');
+    icon.className = 'reel-icon';
+    if (rarity !== null) icon.style.setProperty('--rarity', cssColor(RARITY_COLORS[rarity as 0 | 1 | 2 | 3 | 4]));
+    icon.appendChild(imageCanvas(itemIcon(slot, id), 4));
+    cell.appendChild(icon);
+    return cell;
+  }
+
+  /** Scrolls every reel to its last cell; reels stop one after another. Calls `done` after the last. */
+  private spin(
+    token: number,
+    items: Item[],
+    strips: HTMLElement[],
+    reels: HTMLElement[],
+    done: () => void,
+  ): void {
+    const t0 = performance.now();
+    const landed = [false, false, false];
+    const frame = (now: number) => {
+      if (token !== this.token) return;
+      const elapsed = now - t0;
+      for (let i = 0; i < strips.length; i++) {
+        if (landed[i]) continue;
+        const d = reelDuration(i);
+        const p = Math.min(1, elapsed / d);
+        const distance = (reelCells(i) - 1) * CELL_H;
+        strips[i]!.style.transform = `translateY(${-distance * easeOutBack(p)}px)`;
+        reels[i]!.classList.toggle('fast', p < 0.75);
+        if (p >= 1) {
+          landed[i] = true;
+          strips[i]!.style.transform = `translateY(${-distance}px)`;
+          reels[i]!.classList.remove('fast');
+          reels[i]!.classList.add('landed');
+          reels[i]!.style.setProperty('--rarity', cssColor(RARITY_COLORS[items[i]!.rarity]));
+        }
+      }
+      if (landed.every(Boolean)) {
+        window.setTimeout(() => token === this.token && done(), 700);
+      } else {
+        requestAnimationFrame(frame);
+      }
+    };
+    requestAnimationFrame(frame);
+  }
+
+  private clearSpinKey(): void {
+    if (this.spinKey) window.removeEventListener('keydown', this.spinKey);
+    this.spinKey = null;
+  }
+
   hide(): void {
+    this.token++;
+    this.clearSpinKey();
     this.root.hidden = true;
   }
 
