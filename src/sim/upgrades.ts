@@ -19,7 +19,10 @@ export type UpgradeStat =
   | 'moveSpeed'
   | 'armor'
   | 'pierce'
-  | 'multishot';
+  | 'multishot'
+  | 'critChance'
+  | 'critDamage'
+  | 'lifesteal';
 
 export interface UpgradeDef {
   id: UpgradeStat;
@@ -45,6 +48,9 @@ export const UPGRADES: Record<UpgradeStat, UpgradeDef> = {
   moveSpeed: { id: 'moveSpeed', name: 'Move speed', values: [0.04, 0.06, 0.08, 0.11, 0.15], format: pct, minRarity: 0 },
   armor: { id: 'armor', name: 'Armor', values: [0.03, 0.05, 0.07, 0.1, 0.14], format: (v) => `-${Math.round(v * 100)}% damage taken`, minRarity: 0 },
   pierce: { id: 'pierce', name: 'Piercing', values: [1, 1, 2, 2, 3], format: (v) => `+${v} enemies pierced`, minRarity: 1, rangedOnly: true },
+  critChance: { id: 'critChance', name: 'Crit chance', values: [0.03, 0.05, 0.07, 0.1, 0.14], format: pct, minRarity: 0 },
+  critDamage: { id: 'critDamage', name: 'Crit damage', values: [0.1, 0.15, 0.22, 0.32, 0.5], format: pct, minRarity: 0 },
+  lifesteal: { id: 'lifesteal', name: 'Lifesteal', values: [0.01, 0.015, 0.02, 0.03, 0.045], format: (v) => `heal ${+(v * 100).toFixed(1)}% of damage dealt`, minRarity: 0 },
   multishot: { id: 'multishot', name: 'Multishot', values: [0, 0, 0, 1, 2], format: (v) => `+${v} projectile${v === 1 ? '' : 's'} per volley`, minRarity: 3 },
 };
 
@@ -59,7 +65,7 @@ export interface UpgradeOption {
 export type UpgradeTotals = Record<UpgradeStat, number>;
 
 export function emptyTotals(): UpgradeTotals {
-  return { damage: 0, attackSpeed: 0, maxHp: 0, regen: 0, range: 0, moveSpeed: 0, armor: 0, pierce: 0, multishot: 0 };
+  return { damage: 0, attackSpeed: 0, maxHp: 0, regen: 0, range: 0, moveSpeed: 0, armor: 0, pierce: 0, multishot: 0, critChance: 0, critDamage: 0, lifesteal: 0 };
 }
 
 /** Upgrade rarity weights; epics and legendaries get a little likelier with every offer. */
@@ -68,6 +74,10 @@ const LUCK_PER_OFFER = 0.08;
 /** Armor can't make you immune; move speed can't run away with the game. */
 export const MAX_ARMOR = 0.6;
 export const MAX_UPGRADE_SPEED = 0.6;
+/** Crits start at 150% damage; upgrades add to that. Crit chance and lifesteal are capped. */
+export const BASE_CRIT_DAMAGE = 1.5;
+export const MAX_CRIT_CHANCE = 0.75;
+export const MAX_LIFESTEAL = 0.25;
 
 /** Rolls the three choices for offer number `n` (1-based). Pure and deterministic. */
 export function makeOffer(playerSeed: number, n: number, melee: boolean): UpgradeOption[] {

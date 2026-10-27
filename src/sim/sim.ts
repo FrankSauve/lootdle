@@ -26,7 +26,7 @@ import { SpatialGrid } from './grid.ts';
 import { generateLoadout } from './loot.ts';
 import type { Loadout } from './loot.ts';
 import { ProjectilePool } from './projectiles.ts';
-import { createRng } from './rng.ts';
+import { createRng, hashSeed } from './rng.ts';
 import { UPGRADE_INTERVAL_SECONDS, emptyTotals, openUpgradeOffer } from './upgrades.ts';
 import type { MoveInput, SimState } from './state.ts';
 import { createWeapon, updateWeapon } from './weapons.ts';
@@ -57,6 +57,8 @@ export function createSim(options: SimOptions): SimState {
     godMode: options.godMode ?? false,
     worldRng: createRng(options.worldSeed),
     playerRng: createRng(options.playerSeed),
+    critRng: createRng(hashSeed(`crit:${options.playerSeed}`)),
+    lifestealShown: 0,
     seed: options.playerSeed,
     upgrades: emptyTotals(),
     offer: null,

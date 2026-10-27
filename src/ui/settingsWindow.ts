@@ -4,7 +4,7 @@ import { RARITY_COLORS, RARITY_NAMES } from '../sim/items.ts';
 import { describeItem } from '../sim/loot.ts';
 import type { SimState } from '../sim/sim.ts';
 import { elapsedSeconds } from '../sim/sim.ts';
-import { MAX_ARMOR, UPGRADES, UPGRADE_STATS } from '../sim/upgrades.ts';
+import { BASE_CRIT_DAMAGE, MAX_ARMOR, MAX_CRIT_CHANCE, MAX_LIFESTEAL, UPGRADES, UPGRADE_STATS } from '../sim/upgrades.ts';
 import { cssColor, itemIconCanvas } from './lootPanel.ts';
 
 /**
@@ -137,6 +137,9 @@ export class SettingsWindow {
       ...(w.melee ? [] : ([['Pierce', String(w.pierce)]] as [string, string][])),
       ['Move speed', String(Math.round(p.speed))],
       ['Regeneration', `${(b.regen + u.regen).toFixed(1)} HP/s`],
+      ['Crit chance', `${Math.round(Math.min(MAX_CRIT_CHANCE, u.critChance) * 100)}%`],
+      ['Crit damage', `${Math.round((BASE_CRIT_DAMAGE + u.critDamage) * 100)}%`],
+      ['Lifesteal', `${+(Math.min(MAX_LIFESTEAL, u.lifesteal) * 100).toFixed(1)}%`],
       ['Damage taken', `${Math.round(taken * 100)}%`],
       ['Survived', formatTime(elapsedSeconds(state))],
       ['Kills', stats.kills.toLocaleString()],

@@ -1,7 +1,7 @@
 import { ARENA_HEIGHT, ARENA_WIDTH, DT } from './config.ts';
-import { SRC_WEAPON, applyHitEffects, explode, onEnemyKilled, stormStrike } from './effects.ts';
+import { SRC_CRIT, SRC_WEAPON, applyHitEffects, explode, onEnemyKilled, stormStrike } from './effects.ts';
 import { ENEMY_DEFS, EnemyKind, MAX_ENEMY_RADIUS } from './enemies.ts';
-import { MAX_ARMOR } from './upgrades.ts';
+import { BASE_CRIT_DAMAGE, MAX_ARMOR, MAX_CRIT_CHANCE, MAX_LIFESTEAL } from './upgrades.ts';
 import { ENEMY_SHOT_RADIUS } from './enemyShots.ts';
 import type { SimState } from './state.ts';
 
@@ -69,8 +69,7 @@ export function updateProjectiles(state: SimState): void {
       const hitDist = r + e.radius[j]!;
       if (dx * dx + dy * dy > hitDist * hitDist) continue;
 
-      const dmg = pr.damage[i]!;
-      damageEnemy(state, j, dmg);
+      const dmg = weaponHit(state, j, pr.damage[i]!);
       const speed = Math.sqrt(pr.vx[i]! * pr.vx[i]! + pr.vy[i]! * pr.vy[i]!) || 1;
       applyHitEffects(state, j, pr.vx[i]! / speed, pr.vy[i]! / speed, dmg);
       pr.lastHitId2[i] = pr.lastHitId[i]!;
@@ -82,6 +81,38 @@ export function updateProjectiles(state: SimState): void {
       pr.pierce[i] = pr.pierce[i]! - 1;
     }
   }
+}
+
+/**
+ * A direct hit from the player's weapon: may crit, and heals the player for a share of the damage
+ * actually dealt (lifesteal). Returns the damage rolled, which on-hit effects scale from.
+ */
+export function weaponHit(state: SimState, j: number, base: number): number {
+  const u = state.upgrades;
+  let amount = base;
+  let src = SRC_WEAPON;
+  if (u.critChance > 0 && state.critRng() < Math.min(MAX_CRIT_CHANCE, u.critChance)) {
+    amount = base * (BASE_CRIT_DAMAGE + u.critDamage);
+    src = SRC_CRIT;
+  }
+  const e = state.enemies;
+  const before = e.hp[j]!;
+  damageEnemy(state, j, amount, true, src);
+  if (u.lifesteal > 0 && !(before <= 0)) {
+    const dealt = before - Math.max(0, e.hp[j]!);
+    const p = state.player;
+    const healed = Math.min(dealt * Math.min(MAX_LIFESTEAL, u.lifesteal), p.maxHp - p.hp);
+    if (healed > 0) {
+      p.hp += healed;
+      // Show a heal effect now and then, not on every hit.
+      state.lifestealShown += healed;
+      if (state.lifestealShown >= 3) {
+        state.lifestealShown = 0;
+        state.events.push({ type: 'heal', amount: healed });
+      }
+    }
+  }
+  return amount;
 }
 
 /** Ricochet: redirect a spent projectile toward another nearby enemy instead of removing it. */
@@ -130,7 +161,7 @@ export function damageEnemy(
   const e = state.enemies;
   if (e.dead[i]) return;
   // Armored enemies shrug off part of every direct weapon hit (not explosions, arcs or DOT).
-  if (flash && src === SRC_WEAPON) amount *= ENEMY_DEFS[e.kind[i]! as EnemyKind].armor;
+  if (flash && (src === SRC_WEAPON || src === SRC_CRIT)) amount *= ENEMY_DEFS[e.kind[i]! as EnemyKind].armor;
   const dealt = Math.min(amount, e.hp[i]!);
   e.hp[i] = e.hp[i]! - amount;
   if (flash) {

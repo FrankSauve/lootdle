@@ -44,7 +44,7 @@ const KIND_DEBRIS: Record<EnemyKind, readonly number[]> = {
   [EnemyKind.Boar]: [0x8a5a2b, 0x5e3a1a, 0xf3ecff],
   [EnemyKind.Spitter]: [0x5fbf4a, 0x3a8a34, 0xffe14a],
   [EnemyKind.Bomber]: [0x4a4660, 0xff8a2b, 0xffe14a],
-  [EnemyKind.Knight]: [0xb8bdd0, 0x7d8299, 0x3a6fd9],
+  [EnemyKind.Knight]: [0x6a5a82, 0x453a5c, 0xb13a3a],
   [EnemyKind.Shaman]: [0x7a3fc2, 0x52288f, 0x9ff59a],
   [EnemyKind.Juggernaut]: [0x8a8fa3, 0x5c6070, 0xd9822b, 0xff4d6d],
   [EnemyKind.HiveQueen]: [0xffc94a, 0xc48a1e, 0xcfe8ff, 0x3a2a1a],
@@ -77,7 +77,7 @@ interface Ring {
 }
 
 /** Floating-number colors by damage source (weapon, explosion, lightning). */
-const HIT_COLORS = [0xffffff, 0xffc94a, 0xfff06a, 0xff4d6d];
+const HIT_COLORS = [0xffffff, 0xffc94a, 0xfff06a, 0xff4d6d, 0xff7a2b];
 const VORTEX_COLORS = [0xb06bff, 0x6a3fc2, 0xe6d0ff];
 const REVIVE_COLORS = [0xffc94a, 0xfff6c0, 0xff8a2b];
 /** At most this many floating numbers per rendered frame, so crowds stay readable. */

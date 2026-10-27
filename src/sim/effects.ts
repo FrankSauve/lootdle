@@ -29,6 +29,7 @@ export const SRC_WEAPON = 0;
 export const SRC_EXPLOSION = 1;
 export const SRC_ZAP = 2;
 export const SRC_EXECUTE = 3;
+export const SRC_CRIT = 4;
 
 const STORM_WARD_DAMAGE = 45;
 const STORM_WARD_TARGETS = 5;

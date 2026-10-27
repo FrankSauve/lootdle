@@ -1,6 +1,6 @@
 import type { Build } from './build.ts';
 import { DT } from './config.ts';
-import { damageEnemy } from './combat.ts';
+import { weaponHit } from './combat.ts';
 import { applyHitEffects, explode } from './effects.ts';
 import { MAX_ENEMY_RADIUS } from './enemies.ts';
 import type { SimState, WeaponState } from './state.ts';
@@ -178,7 +178,7 @@ function swing(state: SimState, dx: number, dy: number): void {
     const ey = e.y[j]! - cy;
     const reach = w.meleeRadius + e.radius[j]!;
     if (ex * ex + ey * ey > reach * reach) continue;
-    damageEnemy(state, j, damage);
-    applyHitEffects(state, j, dx, dy, damage);
+    const dealt = weaponHit(state, j, damage);
+    applyHitEffects(state, j, dx, dy, dealt);
   }
 }

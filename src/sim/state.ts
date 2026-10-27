@@ -87,6 +87,10 @@ export interface SimState {
   worldRng: Rng;
   /** Per-player stream: loot and upgrades (used once those systems exist). */
   playerRng: Rng;
+  /** Its own stream for critical hits, so crits never disturb other randomness. */
+  critRng: Rng;
+  /** Healing from lifesteal waiting to be shown, and healing already shown (to limit effects). */
+  lifestealShown: number;
 
   /** The player's seed (upgrade offers are derived from it). */
   seed: number;
