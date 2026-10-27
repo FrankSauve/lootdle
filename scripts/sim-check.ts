@@ -234,7 +234,7 @@ console.log(`Signatures and synergies: all ${everything.length} rolled and ran c
 // 7: every weapon, and a hand-built "everything at once" loadout, stay inside the frame budget.
 {
   const item = (
-    slot: Item['slot'], id: string, effects: EffectId[], signature: SignatureId | null = null, power = 1.56,
+    slot: Item['slot'], id: string, effects: EffectId[], signature: SignatureId | null = null, power = 2.4,
   ): Item => ({ slot, id, name: id, rarity: 4, power, effects, quirk: null, signature });
   const make = (weapon: Item, armor: Item, trinket: Item): Loadout => {
     const items = [weapon, armor, trinket];

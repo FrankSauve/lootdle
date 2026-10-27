@@ -34,7 +34,7 @@ export function spawnRate(t: number): number {
 
 /** Enemy HP multiplier at time t. */
 export function hpMultiplier(t: number): number {
-  let m = 1 + (1.0 * t) / 60;
+  let m = 1 + t / 50 + (t * t) / 9000;
   if (t >= DOOM_SECONDS) m += (1.3 * (t - DOOM_SECONDS)) / 60;
   return m;
 }

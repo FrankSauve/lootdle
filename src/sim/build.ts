@@ -2,7 +2,7 @@
  * Turns a loadout into the flat numbers the simulation uses ("the build").
  * Effects from different items stack additively; a few multipliers are capped.
  */
-import { armorById, fx, sx, weaponById } from './items.ts';
+import { armorById, fx, sx, weaponById, weaponRarityBonus } from './items.ts';
 import type { EffectId, Item, SignatureId } from './items.ts';
 import type { Loadout } from './loot.ts';
 
@@ -100,11 +100,12 @@ export function compileBuild(loadout: Loadout): Build {
   const w = weaponById(loadout.weapon.id);
   const armor = armorById(loadout.armor.id);
 
+  const rb = weaponRarityBonus(loadout.weapon.rarity);
   const b: Build = {
     melee: w.melee,
     cooldown: w.cooldown,
-    count: w.count,
-    damage: w.damage * (1 + 0.05 * loadout.weapon.rarity),
+    count: w.count + rb.count,
+    damage: w.damage * rb.damage,
     projectileSpeed: w.speed,
     projectileRadius: w.radius,
     projectileLife: w.life,
@@ -175,7 +176,7 @@ export function compileBuild(loadout: Loadout): Build {
   };
 
   // Multipliers collected across items, applied at the end.
-  const m = { damage: 1, attackSpeed: 0, range: 1, swift: 0, hp: 1, slow: 1, clumsy: 1, size: 1, dmgMul: 1 };
+  const m = { damage: 1, attackSpeed: rb.haste, range: 1, swift: 0, hp: 1, slow: 1, clumsy: 1, size: rb.size, dmgMul: 1 };
 
   for (const item of [loadout.weapon, loadout.armor, loadout.trinket]) {
     for (const e of item.effects) applyEffect(b, m, e, item);

@@ -9,6 +9,8 @@ import {
   EXTRA_EFFECTS,
   WEAPON_EFFECTS,
   QUIRKS,
+  RARITY_NAMES,
+  RARITY_POWER,
   RARITY_WEIGHTS,
   SIGNATURES,
   SIGNATURE_CHANCE,
@@ -18,6 +20,7 @@ import {
   WEAPONS,
   armorById,
   weaponById,
+  weaponRarityBonus,
 } from './items.ts';
 import type { EffectId, Family, Item, QuirkId, Rarity, SignatureId, Slot, SynergyId } from './items.ts';
 import { createRng, hashSeed } from './rng.ts';
@@ -138,7 +141,7 @@ function finishItem(
   let name = prefix ? `${prefix} ${baseName}` : baseName;
   if (rarity >= 3) name += ` ${SUFFIXES[Math.floor(suffixRoll * SUFFIXES.length)]!}`;
 
-  const power = (1 + 0.14 * rarity) * (quirk ? QUIRK_POWER_BONUS : 1);
+  const power = RARITY_POWER[rarity]! * (quirk ? QUIRK_POWER_BONUS : 1);
   return { slot, id, name, rarity, power, effects, quirk, signature };
 }
 
@@ -223,13 +226,20 @@ export function describeItem(item: Item): ItemDescription {
   const stats: string[] = [];
   if (item.slot === 'weapon') {
     const w = weaponById(item.id);
-    const dmg = Math.round(w.damage * (1 + 0.05 * item.rarity));
+    const bonus = weaponRarityBonus(item.rarity);
+    const dmg = Math.round(w.damage * bonus.damage);
     stats.push(w.melee ? `${dmg} damage, hits an area` : `${dmg} damage x${w.count}`);
     if (w.melee && w.range >= 190) stats.push('Enormous reach');
     stats.push(w.cooldown < 0.2 ? `${Math.round(1 / w.cooldown)} shots per second` : `Strikes every ${w.cooldown}s`);
     if (w.fan) stats.push('Fires in a wide fan');
     if (w.impact) stats.push('Shots explode on impact');
     if (w.knockback > 0) stats.push(`Built-in knockback`);
+    if (item.rarity >= 3) {
+      stats.push(
+        `${RARITY_NAMES[item.rarity]} might: +${Math.round(bonus.haste * 100)}% attack speed, +${bonus.count} ${w.melee ? 'swings' : 'projectiles'}, ` +
+          `${Math.round((bonus.size - 1) * 100)}% bigger`,
+      );
+    }
   } else if (item.slot === 'armor') {
     const a = armorById(item.id);
     if (a.hp > 0) stats.push(`+${a.hp} max HP`);

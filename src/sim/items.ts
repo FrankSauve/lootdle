@@ -60,6 +60,19 @@ export interface Item {
   signature: SignatureId | null;
 }
 
+/** Power of an item's effects by rarity: Legendary is more than double a Common. */
+export const RARITY_POWER: readonly number[] = [1, 1.15, 1.35, 1.7, 2.4];
+
+/** What a weapon's rarity adds on top of its archetype and effects. Legendaries are monsters. */
+export function weaponRarityBonus(r: number) {
+  return {
+    damage: [1, 1.05, 1.2, 1.5, 2.1][r]!,
+    haste: [0, 0, 0.15, 0.4, 0.9][r]!,
+    count: [0, 0, 0, 1, 3][r]!,
+    size: [1, 1, 1.1, 1.25, 1.5][r]!,
+  };
+}
+
 /** Effect numbers as a function of an item's power. Shared by the sim and the descriptions. */
 export const fx = {
   poison: (m: number) => ({ dps: 8 * m, secs: 4 }),
@@ -78,7 +91,7 @@ export const fx = {
   haste: (m: number) => 0.2 * m,
   might: (m: number) => 0.25 * m,
   reach: (m: number) => ({ pierce: m >= 1.5 ? 2 : 1, range: 0.12 * m }),
-  barrage: (m: number) => (m >= 1.5 ? 4 : 3),
+  barrage: (m: number) => (m >= 2 ? 6 : m >= 1.5 ? 4 : 3),
   frenzy: (m: number) => 0.6 * m,
   giant: (m: number) => ({ range: 0.35 * m, size: 0.5 * m }),
 };
@@ -367,9 +380,9 @@ export const TRINKET_EFFECTS: readonly EffectId[] = [
 
 /** How many extra effects an item rolls, by rarity. */
 export const EXTRA_EFFECTS: Record<Slot, readonly number[]> = {
-  weapon: [1, 1, 2, 2, 3],
-  armor: [0, 1, 1, 2, 2],
-  trinket: [0, 0, 1, 1, 2],
+  weapon: [1, 1, 2, 3, 4],
+  armor: [0, 1, 1, 2, 3],
+  trinket: [0, 0, 1, 2, 3],
 };
 
 export function weaponById(id: string): WeaponArchetype {
@@ -427,9 +440,9 @@ export const sx = {
   bloodsplosion: (m: number) => (m >= 1.5 ? 2 : 1),
   tesla: (m: number) => (m >= 1.5 ? 4 : 3),
   vortex: (m: number) => ({ every: m >= 1.5 ? 6 : 8, damage: 60 * m, pull: 340 }),
-  meteors: (m: number) => ({ every: m >= 1.5 ? 1.3 : 1.8, count: m >= 1.5 ? 9 : 6, damage: 55 * m, radius: 92 }),
-  stormcaller: (m: number) => ({ every: 1, targets: m >= 1.5 ? 12 : 7, damage: 50 * m, range: 650 }),
-  bladestorm: (m: number) => ({ blades: m >= 1.5 ? 8 : 6, dps: 60 * m, radius: 125 }),
+  meteors: (m: number) => ({ every: m >= 2 ? 0.9 : m >= 1.5 ? 1.3 : 1.8, count: m >= 2 ? 16 : m >= 1.5 ? 9 : 6, damage: 55 * m, radius: m >= 2 ? 120 : 92 }),
+  stormcaller: (m: number) => ({ every: m >= 2 ? 0.6 : 1, targets: m >= 2 ? 20 : m >= 1.5 ? 12 : 7, damage: 50 * m, range: 750 }),
+  bladestorm: (m: number) => ({ blades: m >= 1.5 ? 8 : 6, dps: 60 * m, radius: m >= 2 ? 170 : 125 }),
   splinter: (m: number) => (m >= 1.5 ? 4 : 2),
   furyEngine: (m: number) => ({ haste: 1.2 * m, damage: 0.7 }),
   colossus: (m: number) => ({ range: 0.6 * m, size: 0.8 * m, damage: 1.15 }),
