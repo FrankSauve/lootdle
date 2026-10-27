@@ -24,6 +24,8 @@ export function createWeapon(build: Build, name: string): WeaponState {
 }
 
 const MAX_TARGETS = 16;
+/** A weapon can fire at most this many volleys in a single tick. */
+const MAX_VOLLEYS_PER_TICK = 4;
 const targetIdx = new Int32Array(MAX_TARGETS);
 const targetDist = new Float64Array(MAX_TARGETS);
 /** Scratch aim direction (avoids allocating per shot). */
@@ -64,13 +66,31 @@ export function updateWeapon(state: SimState): void {
     w.timer = 0; // stay ready and fire as soon as something is in range
     return;
   }
-  w.timer += w.cooldown;
 
+  // Very fast weapons fire several volleys in one tick (up to the cap).
+  let rounds = 0;
+  do {
+    w.timer += w.cooldown;
+    volley(state, found);
+  } while (w.timer <= 0 && ++rounds < MAX_VOLLEYS_PER_TICK);
+  if (w.timer < 0) w.timer = 0;
+}
+
+/** One volley at the targets already found. */
+function volley(state: SimState, found: number): void {
+  const w = state.weapon;
+  const p = state.player;
   const b = state.build;
   if (b.bloodPrice && p.hp > 1) p.hp = Math.max(1, p.hp - 1);
 
-  for (let n = 0; n < w.projectilesPerVolley; n++) {
-    fireAt(state, targetIdx[n % found]!, 0);
+  const count = w.projectilesPerVolley;
+  for (let n = 0; n < count; n++) {
+    if (b.fan > 0 && !w.melee) {
+      // A fan: everything aims at the nearest enemy, spread evenly either side.
+      fireAt(state, targetIdx[0]!, (n - (count - 1) / 2) * b.fan);
+    } else {
+      fireAt(state, targetIdx[n % found]!, 0);
+    }
     state.shots++;
     if (b.echoEvery > 0 && state.shots % b.echoEvery === 0) {
       // Echo: a duplicate toward the next target (or slightly off to the side if there's only one).

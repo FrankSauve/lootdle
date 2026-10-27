@@ -121,6 +121,11 @@ export interface SimState {
   volleys: number;
   phoenixUsed: boolean;
   vortexTimer: number;
+  /** Meteor Shower: seconds until the next volley, and meteors still waiting to fall. */
+  meteorTimer: number;
+  meteorsLeft: number;
+  /** Stormcaller: seconds until the next lightning storm. */
+  stormTimer: number;
   /** Direction of the first orbiting blade (unit vector), and the current blade positions. */
   orbitX: number;
   orbitY: number;

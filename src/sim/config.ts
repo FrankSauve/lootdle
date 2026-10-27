@@ -8,7 +8,7 @@ export const ARENA_HEIGHT = 900;
 
 /** Hard entity budgets: the director stops spawning regular enemies near these limits. */
 export const MAX_ENEMIES = 700;
-export const MAX_PROJECTILES = 1000;
+export const MAX_PROJECTILES = 1600;
 
 export const GRID_CELL_SIZE = 64;
 

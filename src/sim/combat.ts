@@ -72,6 +72,13 @@ export function updateProjectiles(state: SimState): void {
       const dmg = weaponHit(state, j, pr.damage[i]!);
       const speed = Math.sqrt(pr.vx[i]! * pr.vx[i]! + pr.vy[i]! * pr.vy[i]!) || 1;
       applyHitEffects(state, j, pr.vx[i]! / speed, pr.vy[i]! / speed, dmg);
+      if (pr.gen[i] === 0) {
+        const b = state.build;
+        if (b.impact > 0) {
+          explode(state, x, y, b.impact * (1 + 0.5 * state.upgrades.range), dmg * 0.75, 25);
+        }
+        if (b.splinter > 0) splinter(state, i, j, pr.vx[i]!, pr.vy[i]!, pr.damage[i]!);
+      }
       pr.lastHitId2[i] = pr.lastHitId[i]!;
       pr.lastHitId[i] = e.id[j]!;
       if (pr.pierce[i]! <= 0) {
@@ -79,6 +86,29 @@ export function updateProjectiles(state: SimState): void {
         break;
       }
       pr.pierce[i] = pr.pierce[i]! - 1;
+    }
+  }
+}
+
+const SPLIT_COS: readonly number[] = [0.8660254037844386, 0.5];
+const SPLIT_SIN: readonly number[] = [0.5, 0.8660254037844386];
+
+/** Splinter: a hit bursts into fragments fanned out around the shot's direction. */
+function splinter(state: SimState, i: number, hit: number, vx: number, vy: number, damage: number): void {
+  const pr = state.projectiles;
+  const pairs = Math.min(2, state.build.splinter >> 1);
+  const id = state.enemies.id[hit]!;
+  const x = pr.x[i]!;
+  const y = pr.y[i]!;
+  const radius = Math.max(4, pr.radius[i]! * 0.6);
+  for (let k = 0; k < pairs; k++) {
+    const c = SPLIT_COS[k]!;
+    const s = SPLIT_SIN[k]!;
+    for (const sign of [1, -1]) {
+      const child = pr.spawn(x, y, vx * c - vy * s * sign, vy * c + vx * s * sign, damage * 0.5, radius, 0.5, 0);
+      if (child < 0) return;
+      pr.gen[child] = 1;
+      pr.lastHitId[child] = id;
     }
   }
 }

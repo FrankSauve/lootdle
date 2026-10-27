@@ -34,12 +34,16 @@ export type EffectId =
   | 'echo'
   | 'haste'
   | 'might'
-  | 'reach';
+  | 'reach'
+  // Screen-fillers: can roll on weapons and trinkets.
+  | 'barrage'
+  | 'frenzy'
+  | 'giant';
 
 export type QuirkId = 'brittle' | 'heavy' | 'clumsy' | 'fragile' | 'bloodPrice' | 'jittery';
 
 /** Loadout "flavor" families, used to name a build ("The Walking Plague"). */
-export type Family = 'plague' | 'pyre' | 'tesla' | 'nuke' | 'leech' | 'pinball' | 'turtle' | 'blender' | 'runner';
+export type Family = 'plague' | 'pyre' | 'tesla' | 'nuke' | 'leech' | 'pinball' | 'turtle' | 'blender' | 'runner' | 'apocalypse';
 
 export interface Item {
   slot: Slot;
@@ -74,6 +78,9 @@ export const fx = {
   haste: (m: number) => 0.2 * m,
   might: (m: number) => 0.25 * m,
   reach: (m: number) => ({ pierce: m >= 1.5 ? 2 : 1, range: 0.12 * m }),
+  barrage: (m: number) => (m >= 1.5 ? 4 : 3),
+  frenzy: (m: number) => 0.6 * m,
+  giant: (m: number) => ({ range: 0.35 * m, size: 0.5 * m }),
 };
 
 const n = (v: number) => String(Math.round(v * 10) / 10);
@@ -184,6 +191,24 @@ export const EFFECTS: Record<EffectId, EffectDef> = {
     adjective: 'Far-Reaching',
     text: (m) => `+${fx.reach(m).pierce} pierce, +${pct(fx.reach(m).range)} range`,
   },
+  barrage: {
+    label: 'Barrage',
+    family: 'apocalypse',
+    adjective: 'Barraging',
+    text: (m) => `+${fx.barrage(m)} projectiles (or swings) per volley`,
+  },
+  frenzy: {
+    label: 'Frenzy',
+    family: 'apocalypse',
+    adjective: 'Frenzied',
+    text: (m) => `+${pct(fx.frenzy(m))} attack speed`,
+  },
+  giant: {
+    label: 'Giant',
+    family: 'apocalypse',
+    adjective: 'Colossal',
+    text: (m) => `+${pct(fx.giant(m).size)} size, +${pct(fx.giant(m).range)} range`,
+  },
 };
 
 export interface QuirkDef {
@@ -222,6 +247,12 @@ export interface WeaponArchetype {
   offset: number;
   /** Built-in knockback. */
   knockback: number;
+  /** Projectiles in one volley fan out around the target, this many radians apart. */
+  fan?: number;
+  /** Projectiles explode on impact with this radius. */
+  impact?: number;
+  /** Random aim error in radians (sprays). */
+  spread?: number;
 }
 
 export const WEAPONS: readonly WeaponArchetype[] = [
@@ -249,6 +280,36 @@ export const WEAPONS: readonly WeaponArchetype[] = [
     id: 'hammer', name: 'War Hammer', blurb: 'Slow, heavy, knocks back',
     melee: true, cooldown: 0.9, count: 1, damage: 90, speed: 0, radius: 90, life: 0,
     pierce: 0, range: 130, offset: 52, knockback: 34,
+  },
+  {
+    id: 'gatling', name: 'Runic Gatling', blurb: 'A blur of rapid-fire bolts',
+    melee: false, cooldown: 0.06, count: 1, damage: 7, speed: 900, radius: 5, life: 0.9,
+    pierce: 0, range: 460, offset: 0, knockback: 0, spread: 0.1,
+  },
+  {
+    id: 'scattergun', name: 'Hellshot Scattergun', blurb: 'A wide fan of nine shots',
+    melee: false, cooldown: 0.8, count: 9, damage: 14, speed: 800, radius: 6, life: 0.55,
+    pierce: 1, range: 380, offset: 0, knockback: 6, fan: 0.11,
+  },
+  {
+    id: 'scythe', name: "Reaper's Scythe", blurb: 'A vast sweeping arc',
+    melee: true, cooldown: 0.75, count: 1, damage: 46, speed: 0, radius: 150, life: 0,
+    pierce: 0, range: 200, offset: 64, knockback: 0,
+  },
+  {
+    id: 'gauntlet', name: 'Titan Gauntlet', blurb: 'Slams a huge ring around you',
+    melee: true, cooldown: 1.3, count: 1, damage: 70, speed: 0, radius: 240, life: 0,
+    pierce: 0, range: 240, offset: 0, knockback: 20,
+  },
+  {
+    id: 'cannon', name: 'Meteor Cannon', blurb: 'Every shell detonates',
+    melee: false, cooldown: 1.2, count: 1, damage: 55, speed: 560, radius: 20, life: 1.2,
+    pierce: 0, range: 600, offset: 0, knockback: 0, impact: 120,
+  },
+  {
+    id: 'discs', name: 'Razor Discs', blurb: 'Four spinning discs slice through crowds',
+    melee: false, cooldown: 0.9, count: 4, damage: 22, speed: 500, radius: 14, life: 2.2,
+    pierce: 14, range: 520, offset: 0, knockback: 0, fan: 0.45,
   },
 ];
 
@@ -288,14 +349,20 @@ export const TRINKETS: readonly TrinketArchetype[] = [
   { id: 'knuckle', name: 'Iron Knuckle', effect: 'knockback' },
   { id: 'tooth', name: 'Vampire Tooth', effect: 'lifesteal' },
   { id: 'bomb', name: 'Bomb Heart', effect: 'explosion' },
+  { id: 'quiver', name: 'Quiver of Legion', effect: 'barrage' },
+  { id: 'core', name: 'Overclock Core', effect: 'frenzy' },
+  { id: 'colossus', name: 'Colossus Heart', effect: 'giant' },
 ];
 
 export const OFFENSIVE_EFFECTS: readonly EffectId[] = [
   'poison', 'burn', 'shock', 'knockback', 'lifesteal', 'explosion',
 ];
 export const DEFENSIVE_EFFECTS: readonly EffectId[] = ['fortified', 'swift', 'regen', 'thorns', 'barrier'];
+/** Screen-fillers: huge volume, attack speed and size. */
+export const APOCALYPSE_EFFECTS: readonly EffectId[] = ['barrage', 'frenzy', 'giant'];
+export const WEAPON_EFFECTS: readonly EffectId[] = [...OFFENSIVE_EFFECTS, ...APOCALYPSE_EFFECTS];
 export const TRINKET_EFFECTS: readonly EffectId[] = [
-  ...OFFENSIVE_EFFECTS, 'twin', 'echo', 'haste', 'might', 'reach',
+  ...OFFENSIVE_EFFECTS, 'twin', 'echo', 'haste', 'might', 'reach', ...APOCALYPSE_EFFECTS,
 ];
 
 /** How many extra effects an item rolls, by rarity. */
@@ -338,7 +405,13 @@ export type SignatureId =
   | 'plague'
   | 'bloodsplosion'
   | 'tesla'
-  | 'vortex';
+  | 'vortex'
+  | 'meteors'
+  | 'stormcaller'
+  | 'bladestorm'
+  | 'splinter'
+  | 'furyEngine'
+  | 'colossus';
 
 /** Numbers for each signature as a function of the item's power. */
 export const sx = {
@@ -354,6 +427,12 @@ export const sx = {
   bloodsplosion: (m: number) => (m >= 1.5 ? 2 : 1),
   tesla: (m: number) => (m >= 1.5 ? 4 : 3),
   vortex: (m: number) => ({ every: m >= 1.5 ? 6 : 8, damage: 60 * m, pull: 340 }),
+  meteors: (m: number) => ({ every: m >= 1.5 ? 1.3 : 1.8, count: m >= 1.5 ? 9 : 6, damage: 55 * m, radius: 92 }),
+  stormcaller: (m: number) => ({ every: 1, targets: m >= 1.5 ? 12 : 7, damage: 50 * m, range: 650 }),
+  bladestorm: (m: number) => ({ blades: m >= 1.5 ? 8 : 6, dps: 60 * m, radius: 125 }),
+  splinter: (m: number) => (m >= 1.5 ? 4 : 2),
+  furyEngine: (m: number) => ({ haste: 1.2 * m, damage: 0.7 }),
+  colossus: (m: number) => ({ range: 0.6 * m, size: 0.8 * m, damage: 1.15 }),
 };
 
 export interface SignatureDef {
@@ -416,6 +495,34 @@ export const SIGNATURES: Record<SignatureId, SignatureDef> = {
   vortex: {
     title: 'Black Hole', prefix: 'Void', slots: ['trinket'], implies: [],
     text: (m) => `Every ${sx.vortex(m).every}s, drags enemies in and blasts them`,
+  },
+  meteors: {
+    title: 'Meteor Shower', prefix: 'Falling', slots: ['weapon', 'trinket'], implies: [],
+    text: (m) =>
+      `Every ${sx.meteors(m).every}s, ${sx.meteors(m).count} meteors crash onto enemies (${n(sx.meteors(m).damage)} dmg). ` +
+      `They carry your poison and fire`,
+  },
+  stormcaller: {
+    title: 'Stormcaller', prefix: 'Thunderous', slots: ['trinket', 'armor'], implies: [],
+    text: (m) =>
+      `Every second, lightning strikes ${sx.stormcaller(m).targets} foes across the screen (${n(sx.stormcaller(m).damage)} dmg)`,
+  },
+  bladestorm: {
+    title: 'Bladestorm', prefix: 'Storming', slots: ['weapon', 'trinket'], implies: [],
+    text: (m) =>
+      `${sx.bladestorm(m).blades} huge blades whirl around you, ${n(sx.bladestorm(m).dps)}/s each. They carry your poison and fire`,
+  },
+  splinter: {
+    title: 'Splinter', prefix: 'Splintering', slots: ['weapon'], implies: [], projectileOnly: true,
+    text: (m) => `Every hit bursts into ${sx.splinter(m)} fragments`,
+  },
+  furyEngine: {
+    title: 'Fury Engine', prefix: 'Furious', slots: ['weapon'], implies: [],
+    text: (m) => `+${pct(sx.furyEngine(m).haste)} attack speed, but -30% damage`,
+  },
+  colossus: {
+    title: 'Colossus', prefix: 'Colossal', slots: ['weapon'], implies: [],
+    text: (m) => `+${pct(sx.colossus(m).range)} range, +${pct(sx.colossus(m).size)} size, +15% damage`,
   },
 };
 

@@ -24,6 +24,10 @@ export interface Build {
   meleeRadius: number;
   meleeOffset: number;
   knockback: number;
+  /** Fan angle between projectiles in a volley (0 = each aims at its own target). */
+  fan: number;
+  /** Projectiles explode on impact with this radius (0 = they don't). */
+  impact: number;
   // Player
   maxHp: number;
   moveSpeed: number;
@@ -72,6 +76,16 @@ export interface Build {
   vortexEvery: number;
   vortexDamage: number;
   vortexPull: number;
+  meteorEvery: number;
+  meteorCount: number;
+  meteorDamage: number;
+  meteorRadius: number;
+  stormEvery: number;
+  stormTargets: number;
+  stormDamage: number;
+  stormRange: number;
+  /** Fragments a projectile bursts into when it hits (0 = none). */
+  splinter: number;
   // Synergies
   plagueBlast: boolean;
   napalm: boolean;
@@ -99,12 +113,14 @@ export function compileBuild(loadout: Loadout): Build {
     meleeRadius: w.radius,
     meleeOffset: w.offset,
     knockback: w.knockback,
+    fan: w.fan ?? 0,
+    impact: w.impact ?? 0,
     maxHp: BASE_HP + armor.hp,
     moveSpeed: BASE_SPEED * armor.speedMul,
     damageTakenMul: 1,
     regen: 0,
     bloodPrice: false,
-    spread: 0,
+    spread: w.spread ?? 0,
     poisonDps: 0,
     poisonSecs: 0,
     burnDps: 0,
@@ -140,6 +156,15 @@ export function compileBuild(loadout: Loadout): Build {
     vortexEvery: 0,
     vortexDamage: 0,
     vortexPull: 0,
+    meteorEvery: 0,
+    meteorCount: 0,
+    meteorDamage: 0,
+    meteorRadius: 0,
+    stormEvery: 0,
+    stormTargets: 0,
+    stormDamage: 0,
+    stormRange: 0,
+    splinter: 0,
     plagueBlast: loadout.synergies.includes('plagueBlast'),
     napalm: loadout.synergies.includes('napalm'),
     concussive: loadout.synergies.includes('concussive'),
@@ -150,18 +175,20 @@ export function compileBuild(loadout: Loadout): Build {
   };
 
   // Multipliers collected across items, applied at the end.
-  const m = { damage: 1, attackSpeed: 0, range: 1, swift: 0, hp: 1, slow: 1, clumsy: 1 };
+  const m = { damage: 1, attackSpeed: 0, range: 1, swift: 0, hp: 1, slow: 1, clumsy: 1, size: 1, dmgMul: 1 };
 
   for (const item of [loadout.weapon, loadout.armor, loadout.trinket]) {
     for (const e of item.effects) applyEffect(b, m, e, item);
-    if (item.signature) applySignature(b, item.signature, item.power);
+    if (item.signature) applySignature(b, m, item.signature, item.power);
     applyQuirk(b, m, item);
   }
 
-  b.damage *= m.damage;
+  b.damage *= m.damage * m.dmgMul;
+  b.projectileRadius *= m.size;
+  b.impact *= m.size;
   b.cooldown = (b.cooldown * m.clumsy) / (1 + m.attackSpeed);
   b.range *= m.range;
-  b.meleeRadius *= 1 + (m.range - 1) * 0.5;
+  b.meleeRadius *= (1 + (m.range - 1) * 0.5) * m.size;
   b.meleeOffset *= m.range;
   b.maxHp = Math.max(1, Math.round(b.maxHp * m.hp));
   b.moveSpeed *= Math.min(MAX_SPEED_MUL, (1 + m.swift) * m.slow);
@@ -176,6 +203,10 @@ interface Multipliers {
   hp: number;
   slow: number;
   clumsy: number;
+  /** Projectile and melee size. */
+  size: number;
+  /** Separate damage multiplier (so a damage penalty doesn't mix with additive bonuses). */
+  dmgMul: number;
 }
 
 function applyEffect(b: Build, m: Multipliers, effect: EffectId, item: Item): void {
@@ -255,10 +286,22 @@ function applyEffect(b: Build, m: Multipliers, effect: EffectId, item: Item): vo
       m.range += v.range;
       break;
     }
+    case 'barrage':
+      b.count += fx.barrage(p);
+      break;
+    case 'frenzy':
+      m.attackSpeed += fx.frenzy(p);
+      break;
+    case 'giant': {
+      const v = fx.giant(p);
+      m.range += v.range;
+      m.size *= 1 + v.size;
+      break;
+    }
   }
 }
 
-function applySignature(b: Build, sig: SignatureId, p: number): void {
+function applySignature(b: Build, m: Multipliers, sig: SignatureId, p: number): void {
   switch (sig) {
     case 'ricochet':
       b.ricochet += sx.ricochet(p);
@@ -274,9 +317,9 @@ function applySignature(b: Build, sig: SignatureId, p: number): void {
       break;
     case 'orbit': {
       const v = sx.orbit(p);
-      b.orbitBlades = v.blades;
-      b.orbitDps = v.dps;
-      b.orbitRadius = v.radius;
+      b.orbitBlades = Math.max(b.orbitBlades, v.blades);
+      b.orbitDps = Math.max(b.orbitDps, v.dps);
+      b.orbitRadius = Math.max(b.orbitRadius, v.radius);
       break;
     }
     case 'phoenix': {
@@ -314,6 +357,45 @@ function applySignature(b: Build, sig: SignatureId, p: number): void {
       b.vortexPull = v.pull;
       break;
     }
+    case 'meteors': {
+      const v = sx.meteors(p);
+      b.meteorEvery = b.meteorEvery === 0 ? v.every : Math.min(b.meteorEvery, v.every);
+      b.meteorCount += v.count;
+      b.meteorDamage = Math.max(b.meteorDamage, v.damage);
+      b.meteorRadius = Math.max(b.meteorRadius, v.radius);
+      break;
+    }
+    case 'stormcaller': {
+      const v = sx.stormcaller(p);
+      b.stormEvery = b.stormEvery === 0 ? v.every : Math.min(b.stormEvery, v.every);
+      b.stormTargets += v.targets;
+      b.stormDamage = Math.max(b.stormDamage, v.damage);
+      b.stormRange = Math.max(b.stormRange, v.range);
+      break;
+    }
+    case 'bladestorm': {
+      const v = sx.bladestorm(p);
+      b.orbitBlades = Math.max(b.orbitBlades, v.blades);
+      b.orbitDps = Math.max(b.orbitDps, v.dps);
+      b.orbitRadius = Math.max(b.orbitRadius, v.radius);
+      break;
+    }
+    case 'splinter':
+      b.splinter = Math.max(b.splinter, sx.splinter(p));
+      break;
+    case 'furyEngine': {
+      const v = sx.furyEngine(p);
+      m.attackSpeed += v.haste;
+      m.dmgMul *= v.damage;
+      break;
+    }
+    case 'colossus': {
+      const v = sx.colossus(p);
+      m.range += v.range;
+      m.size *= 1 + v.size;
+      m.dmgMul *= v.damage;
+      break;
+    }
   }
 }
 
@@ -335,7 +417,7 @@ function applyQuirk(b: Build, m: Multipliers, item: Item): void {
       b.bloodPrice = true;
       break;
     case 'jittery':
-      b.spread = 0.3;
+      b.spread = Math.max(b.spread, 0.3);
       break;
     case null:
       break;

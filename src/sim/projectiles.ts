@@ -24,6 +24,8 @@ export class ProjectilePool {
   readonly lastHitId2: Uint32Array;
   /** How many times a ricocheting projectile has bounced. */
   readonly bounces: Uint8Array;
+  /** 0 for shots fired by the weapon, 1 for fragments (which never split or explode again). */
+  readonly gen: Uint8Array;
 
   constructor(capacity = MAX_PROJECTILES) {
     this.capacity = capacity;
@@ -41,6 +43,7 @@ export class ProjectilePool {
     this.lastHitId = new Uint32Array(capacity);
     this.lastHitId2 = new Uint32Array(capacity);
     this.bounces = new Uint8Array(capacity);
+    this.gen = new Uint8Array(capacity);
   }
 
   spawn(
@@ -67,6 +70,7 @@ export class ProjectilePool {
     this.lastHitId[i] = 0;
     this.lastHitId2[i] = 0;
     this.bounces[i] = 0;
+    this.gen[i] = 0;
     return i;
   }
 
@@ -89,6 +93,7 @@ export class ProjectilePool {
         this.lastHitId[w] = this.lastHitId[r]!;
         this.lastHitId2[w] = this.lastHitId2[r]!;
         this.bounces[w] = this.bounces[r]!;
+        this.gen[w] = this.gen[r]!;
       }
       w++;
     }

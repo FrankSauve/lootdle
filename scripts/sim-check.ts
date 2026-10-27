@@ -9,8 +9,9 @@
  */
 import { compileBuild } from '../src/sim/build.ts';
 import { ENEMY_DEFS, EnemyKind } from '../src/sim/enemies.ts';
-import { RARITY_NAMES, SIGNATURES, SYNERGIES } from '../src/sim/items.ts';
-import type { SignatureId, SynergyId } from '../src/sim/items.ts';
+import { RARITY_NAMES, SIGNATURES, SYNERGIES, WEAPONS } from '../src/sim/items.ts';
+import type { EffectId, Item, SignatureId, SynergyId } from '../src/sim/items.ts';
+import { findSynergies } from '../src/sim/loot.ts';
 import { UPGRADES, makeOffer } from '../src/sim/upgrades.ts';
 import { createRng } from '../src/sim/rng.ts';
 import { DT, TICK_RATE, chooseUpgrade, createSim, elapsedSeconds, stepSim } from '../src/sim/sim.ts';
@@ -230,6 +231,49 @@ for (const key of everything) {
 }
 console.log(`Signatures and synergies: all ${everything.length} rolled and ran cleanly in god mode`);
 
+// 7: every weapon, and a hand-built "everything at once" loadout, stay inside the frame budget.
+{
+  const item = (
+    slot: Item['slot'], id: string, effects: EffectId[], signature: SignatureId | null = null, power = 1.56,
+  ): Item => ({ slot, id, name: id, rarity: 4, power, effects, quirk: null, signature });
+  const make = (weapon: Item, armor: Item, trinket: Item): Loadout => {
+    const items = [weapon, armor, trinket];
+    return {
+      seed: 1, weapon, armor, trinket, buildName: 'test', family: 'apocalypse',
+      synergies: findSynergies(items), bestRarity: 4,
+    };
+  };
+  const plainArmor = item('armor', 'mail', []);
+  const plainTrinket = item('trinket', 'idol', ['might']);
+  for (const w of WEAPONS) {
+    const l = make(item('weapon', w.id, ['burn', 'poison']), plainArmor, plainTrinket);
+    const r = run(60, true, 3, l);
+    const ok = Number.isFinite(r.stats.damageDealt) && r.avgTickMs < 4;
+    console.log(`  ${w.name.padEnd(22)} ${String(r.stats.kills).padStart(5)} kills in 60s, ${r.avgTickMs.toFixed(3)} ms/tick`);
+    if (!ok) failed = true;
+  }
+  const ultimate = make(
+    item('weapon', 'gatling', ['barrage', 'frenzy', 'giant', 'burn'], 'splinter'),
+    item('armor', 'robe', ['regen'], 'stormcaller'),
+    item('trinket', 'quiver', ['barrage', 'frenzy', 'explosion', 'shock'], 'meteors'),
+  );
+  const u = run(120, true, 3, ultimate);
+  const bu = compileBuild(ultimate);
+  console.log(
+    `Ultimate loadout: ${(1 / (bu.cooldown)).toFixed(0)} volleys/s x${bu.count}, ${u.stats.kills} kills in 2:00, ` +
+      `peak ${u.maxProjectiles} projectiles, ${u.avgTickMs.toFixed(3)} ms/tick avg, ${u.slowestTickMs.toFixed(2)} ms slowest`,
+  );
+  if (u.avgTickMs > 6 || !Number.isFinite(u.stats.damageDealt)) failed = true;
+  const bladeStorm = make(
+    item('weapon', 'scythe', ['frenzy', 'giant'], 'colossus'),
+    item('armor', 'plate', [], 'stormcaller'),
+    item('trinket', 'vial', ['poison'], 'bladestorm'),
+  );
+  const bs = run(120, true, 3, bladeStorm);
+  console.log(`Blade storm loadout: ${bs.stats.kills} kills in 2:00, ${bs.avgTickMs.toFixed(3)} ms/tick avg`);
+  if (bs.avgTickMs > 6 || !Number.isFinite(bs.stats.damageDealt)) failed = true;
+}
+
 // Every enemy kind (bosses included) is spawned next to a god-mode player and must behave:
 // finite positions, no pool overflow, and the shooters/summoners actually act.
 {
@@ -243,6 +287,7 @@ console.log(`Signatures and synergies: all ${everything.length} rolled and ran c
     let blasts = 0;
     for (let t = 0; t < 20 * TICK_RATE; t++) {
       if (sim.offer) chooseUpgrade(sim, 0);
+      sim.weapon.timer = 1e9; // the daily weapon would kill the test subjects too fast
       const before = sim.enemies.count;
       stepSim(sim, { x: Math.sin(t / 90) > 0 ? 1 : -1, y: 0 });
       shots = Math.max(shots, sim.enemyShots.count);

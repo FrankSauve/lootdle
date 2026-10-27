@@ -34,7 +34,7 @@ export const SRC_CRIT = 4;
 const STORM_WARD_DAMAGE = 45;
 const STORM_WARD_TARGETS = 5;
 const STORM_WARD_RANGE = 280;
-const BLADE_RADIUS = 16;
+const BLADE_RADIUS = 20;
 /** Orbit speed: 3.2 rad/s, as exact per-tick rotation constants (no trig at runtime). */
 const ORBIT_COS = 0.998578114865157;
 const ORBIT_SIN = 0.05330805297841217;
@@ -43,6 +43,8 @@ const SLOT_ROT: Record<number, readonly [number, number]> = {
   3: [-0.5, 0.8660254037844386],
   4: [0, 1],
   5: [0.30901699437494745, 0.9510565162951535],
+  6: [0.5, 0.8660254037844386],
+  8: [0.7071067811865476, 0.7071067811865476],
 };
 
 const fanTargets = new Int32Array(8);
@@ -331,7 +333,11 @@ export function tickAuras(state: SimState): void {
         const dx = e.x[j]! - bx;
         const dy = e.y[j]! - by;
         const reach = BLADE_RADIUS + e.radius[j]!;
-        if (dx * dx + dy * dy <= reach * reach) damageEnemy(state, j, b.orbitDps * DT, false);
+        if (dx * dx + dy * dy <= reach * reach) {
+          damageEnemy(state, j, b.orbitDps * DT, false);
+          if (b.poisonDps > 0) poison(state, j);
+          if (b.burnDps > 0) ignite(state, j);
+        }
       }
       const tx = vx * rc - vy * rs;
       vy = vx * rs + vy * rc;
@@ -354,11 +360,74 @@ export function tickAuras(state: SimState): void {
     }
   }
 
+  if (b.meteorEvery > 0) {
+    state.meteorTimer -= DT;
+    if (state.meteorTimer <= 0) {
+      state.meteorTimer += b.meteorEvery;
+      state.meteorsLeft += b.meteorCount;
+    }
+    // Meteors rain down one after another, a few ticks apart.
+    if (state.meteorsLeft > 0 && state.tick % 3 === 0) {
+      state.meteorsLeft--;
+      meteorStrike(state);
+    }
+  }
+
+  if (b.stormEvery > 0) {
+    state.stormTimer -= DT;
+    if (state.stormTimer <= 0) {
+      state.stormTimer += b.stormEvery;
+      stormBolts(state);
+    }
+  }
+
   if (b.vortexEvery > 0) {
     state.vortexTimer -= DT;
     if (state.vortexTimer <= 0) {
       state.vortexTimer += b.vortexEvery;
       vortex(state);
+    }
+  }
+}
+
+/** Picks a random living enemy within `range` of the player (a few tries), or -1. */
+function randomEnemyNear(state: SimState, range: number): number {
+  const e = state.enemies;
+  const p = state.player;
+  if (e.count === 0) return -1;
+  const rangeSq = range * range;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const j = Math.floor(state.playerRng() * e.count);
+    if (e.dead[j]) continue;
+    const dx = e.x[j]! - p.x;
+    const dy = e.y[j]! - p.y;
+    if (dx * dx + dy * dy <= rangeSq) return j;
+  }
+  return -1;
+}
+
+/** Meteor Shower: one meteor crashes onto a random enemy, carrying poison and fire. */
+function meteorStrike(state: SimState): void {
+  const b = state.build;
+  const j = randomEnemyNear(state, 760);
+  if (j < 0) return;
+  const e = state.enemies;
+  explode(state, e.x[j]!, e.y[j]!, b.meteorRadius, b.meteorDamage, 0, FLAG_POISON | FLAG_BURN);
+}
+
+/** Stormcaller: lightning from the sky onto several random enemies at once. */
+function stormBolts(state: SimState): void {
+  const b = state.build;
+  const e = state.enemies;
+  for (let k = 0; k < b.stormTargets; k++) {
+    const j = randomEnemyNear(state, b.stormRange);
+    if (j < 0) continue;
+    const x = e.x[j]!;
+    const y = e.y[j]!;
+    if (!arc(state, x + (state.playerRng() - 0.5) * 60, y - 340, j, b.stormDamage)) return;
+    if (!e.dead[j]) {
+      if (b.poisonDps > 0) poison(state, j);
+      if (b.burnDps > 0) ignite(state, j);
     }
   }
 }

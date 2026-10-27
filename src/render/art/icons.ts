@@ -36,6 +36,12 @@ function draw(slot: 'weapon' | 'armor' | 'trinket', id: string): PixelImage {
       case 'staff': return staff();
       case 'sword': return sword();
       case 'hammer': return hammer();
+      case 'gatling': return gatling();
+      case 'scattergun': return scattergun();
+      case 'scythe': return scythe();
+      case 'gauntlet': return gauntlet();
+      case 'cannon': return cannon();
+      case 'discs': return discs();
     }
   } else if (slot === 'armor') {
     switch (id) {
@@ -59,6 +65,9 @@ function draw(slot: 'weapon' | 'armor' | 'trinket', id: string): PixelImage {
       case 'knuckle': return orb(0xaab4c8);
       case 'tooth': return gem(0xb8283f);
       case 'bomb': return bomb();
+      case 'quiver': return quiver();
+      case 'core': return orb(0x44e0ff);
+      case 'colossus': return gem(0xff9a3d);
     }
   }
   return createImage(SIZE, SIZE);
@@ -171,6 +180,83 @@ function hammer(): PixelImage {
   fillRect(i, 6, 1, 7, 2, STEEL);
   fillRect(i, 6, 1, 2, 5, WHITE);
   fillRect(i, 11, 1, 2, 5, 0x6b7388);
+  return i;
+}
+
+function gatling(): PixelImage {
+  const i = createImage(SIZE, SIZE);
+  for (const y of [4, 6, 8]) fillRect(i, 1, y, 10, 1, STEEL);
+  for (const y of [4, 6, 8]) setPixel(i, 11, y, WHITE);
+  fillRect(i, 1, 3, 10, 1, STEEL_DARK);
+  fillRect(i, 1, 9, 10, 1, STEEL_DARK);
+  fillRect(i, 10, 3, 2, 7, GOLD_DARK);
+  fillRect(i, 2, 10, 4, 3, WOOD);
+  setPixel(i, 12, 6, 0xffe14a);
+  setPixel(i, 13, 5, 0xffe14a);
+  return i;
+}
+
+function scattergun(): PixelImage {
+  const i = createImage(SIZE, SIZE);
+  line(i, 1, 11, 9, 5, WOOD, 3);
+  line(i, 5, 7, 12, 2, STEEL, 2);
+  line(i, 6, 9, 12, 5, STEEL_DARK, 2);
+  setPixel(i, 13, 1, 0xffe14a);
+  setPixel(i, 13, 4, 0xffe14a);
+  setPixel(i, 13, 7, 0xffe14a);
+  return i;
+}
+
+function scythe(): PixelImage {
+  const i = createImage(SIZE, SIZE);
+  line(i, 2, 12, 10, 3, WOOD, 2);
+  line(i, 6, 2, 12, 4, STEEL, 2);
+  line(i, 4, 1, 7, 2, STEEL, 2);
+  line(i, 12, 4, 12, 9, STEEL_DARK, 1);
+  setPixel(i, 6, 2, WHITE);
+  setPixel(i, 8, 2, WHITE);
+  return i;
+}
+
+function gauntlet(): PixelImage {
+  const i = createImage(SIZE, SIZE);
+  fillRect(i, 3, 5, 8, 7, 0xb8c0d4);
+  fillRect(i, 3, 5, 8, 2, WHITE);
+  for (const x of [3, 5, 7, 9]) fillRect(i, x, 2, 2, 4, STEEL_DARK);
+  fillRect(i, 2, 11, 10, 2, 0x6b7388);
+  fillRect(i, 11, 6, 2, 4, GOLD);
+  return i;
+}
+
+function cannon(): PixelImage {
+  const i = createImage(SIZE, SIZE);
+  line(i, 2, 10, 9, 4, 0x555e75, 4);
+  line(i, 3, 10, 9, 5, 0x8590aa, 1);
+  disc(i, 3, 11, 3, WOOD_DARK);
+  disc(i, 11, 3, 2, 0xff7a2b);
+  setPixel(i, 11, 3, 0xffe14a);
+  return i;
+}
+
+function discs(): PixelImage {
+  const i = createImage(SIZE, SIZE);
+  for (const [cx, cy] of [[4, 4], [9, 9]] as const) {
+    disc(i, cx, cy, 3, STEEL);
+    disc(i, cx, cy, 1, 0x4a5168);
+    setPixel(i, cx - 2, cy - 2, WHITE);
+  }
+  return i;
+}
+
+function quiver(): PixelImage {
+  const i = createImage(SIZE, SIZE);
+  fillRect(i, 4, 6, 6, 7, WOOD);
+  fillRect(i, 4, 6, 2, 7, 0xc79053);
+  for (const x of [4, 6, 8]) {
+    line(i, x + 1, 1, x + 1, 6, STEEL, 1);
+    setPixel(i, x + 1, 0, WHITE);
+    setPixel(i, x, 2, 0xe5334b);
+  }
   return i;
 }
 

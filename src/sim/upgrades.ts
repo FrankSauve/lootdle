@@ -134,7 +134,7 @@ export function refreshStats(state: SimState): void {
   const b = state.build;
   const w = state.weapon;
   w.damage = b.damage * (1 + u.damage);
-  w.cooldown = b.cooldown / (1 + u.attackSpeed);
+  w.cooldown = Math.max(0.01, b.cooldown / (1 + u.attackSpeed));
   w.range = b.range * (1 + u.range);
   w.projectileLife = b.projectileLife * (1 + u.range);
   w.meleeRadius = b.meleeRadius * (1 + 0.5 * u.range);

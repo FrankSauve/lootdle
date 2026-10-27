@@ -7,7 +7,7 @@ import {
   DEFENSIVE_EFFECTS,
   EFFECTS,
   EXTRA_EFFECTS,
-  OFFENSIVE_EFFECTS,
+  WEAPON_EFFECTS,
   QUIRKS,
   RARITY_WEIGHTS,
   SIGNATURES,
@@ -52,10 +52,11 @@ const BUILD_NAMES: Record<Family, string> = {
   turtle: 'The Immortal Turtle',
   blender: 'The Living Blender',
   runner: 'The Slippery Eel',
+  apocalypse: 'The Screen Eraser',
 };
 /** Order used to break ties between families. */
 const FAMILY_ORDER: readonly Family[] = [
-  'plague', 'pyre', 'tesla', 'nuke', 'leech', 'pinball', 'turtle', 'blender', 'runner',
+  'plague', 'pyre', 'tesla', 'nuke', 'leech', 'pinball', 'turtle', 'blender', 'runner', 'apocalypse',
 ];
 
 export function generateLoadout(playerSeed: number): Loadout {
@@ -76,7 +77,7 @@ export function generateLoadout(playerSeed: number): Loadout {
 function rollWeapon(rng: Rng): Item {
   const base = pick(rng, WEAPONS);
   const rarity = rollRarity(rng);
-  const effects = pickDistinct(rng, OFFENSIVE_EFFECTS, EXTRA_EFFECTS.weapon[rarity]!, []);
+  const effects = pickDistinct(rng, WEAPON_EFFECTS, EXTRA_EFFECTS.weapon[rarity]!, []);
   return finishItem(rng, 'weapon', base.id, base.name, rarity, effects, base.melee);
 }
 
@@ -182,11 +183,15 @@ export function findSynergies(items: readonly Item[]): SynergyId[] {
 
 function nameBuild(items: readonly Item[]): { family: Family; buildName: string } {
   const score = new Map<Family, number>();
+  const screenFillers: readonly (SignatureId | null)[] = [
+    'meteors', 'stormcaller', 'bladestorm', 'splinter', 'furyEngine', 'colossus',
+  ];
   for (const item of items) {
     for (const e of item.effects) {
       const f = EFFECTS[e].family;
       score.set(f, (score.get(f) ?? 0) + 1);
     }
+    if (screenFillers.includes(item.signature)) score.set('apocalypse', (score.get('apocalypse') ?? 0) + 2);
   }
   let family: Family = FAMILY_ORDER[0]!;
   let best = -1;
@@ -220,7 +225,10 @@ export function describeItem(item: Item): ItemDescription {
     const w = weaponById(item.id);
     const dmg = Math.round(w.damage * (1 + 0.05 * item.rarity));
     stats.push(w.melee ? `${dmg} damage, hits an area` : `${dmg} damage x${w.count}`);
-    stats.push(`Strikes every ${w.cooldown}s`);
+    if (w.melee && w.range >= 190) stats.push('Enormous reach');
+    stats.push(w.cooldown < 0.2 ? `${Math.round(1 / w.cooldown)} shots per second` : `Strikes every ${w.cooldown}s`);
+    if (w.fan) stats.push('Fires in a wide fan');
+    if (w.impact) stats.push('Shots explode on impact');
     if (w.knockback > 0) stats.push(`Built-in knockback`);
   } else if (item.slot === 'armor') {
     const a = armorById(item.id);
