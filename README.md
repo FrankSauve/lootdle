@@ -101,3 +101,10 @@ when it dies or touches you), Brute, Boar (telegraphed charge), Knight (armored:
 from 0:25. A boss arrives every 20 s, cycling Giant Slime, Juggernaut (charges + debris ring), Hive Queen
 (summons rats) and Lich (spell fans and rings); from the fifth boss on, two arrive together.
 The debug menu can spawn any of them.
+
+## Stat upgrades
+
+Every 30 seconds the game pauses and offers three stat upgrades (click a card or press 1/2/3). Rarity
+decides how much you get. Stats: damage, attack speed, max health, regeneration, range, move speed,
+armor, piercing (ranged weapons only, Uncommon+) and multishot (Epic+). Offers are seeded by the player
+and the offer number, so they are deterministic. The debug menu has an "Upgrade now" button.

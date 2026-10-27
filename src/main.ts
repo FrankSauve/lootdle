@@ -13,6 +13,8 @@ import { SettingsStore } from './settings.ts';
 import { Hud } from './ui/hud.ts';
 import { LootPanel } from './ui/lootPanel.ts';
 import { SettingsWindow } from './ui/settingsWindow.ts';
+import { UpgradeWindow } from './ui/upgradeWindow.ts';
+import { chooseUpgrade, openUpgradeOffer } from './sim/upgrades.ts';
 
 /** Caps catch-up work per frame (matters at high debug game speeds). */
 const MAX_STEPS_PER_FRAME = 600;
@@ -90,6 +92,7 @@ async function main() {
     accumulator = 0;
     renderer.reset();
     hud.reset();
+    upgradeWindow.hide();
     // With the slot machine the gear icons would spoil the result, so they appear once it has landed.
     if (spin) hud.clearLoadout();
     else hud.setLoadout(loadout);
@@ -105,6 +108,7 @@ async function main() {
 
   const hud = new Hud(container, playfield, () => newRun(), () => settingsWindow.open());
   const lootPanel = new LootPanel(container);
+  const upgradeWindow = new UpgradeWindow(container, (i) => chooseUpgrade(sim, i));
   const settingsWindow = new SettingsWindow(container, settings);
   newRun(true);
 
@@ -156,6 +160,7 @@ async function main() {
           sim.enemies.spawn(kind as EnemyKind, x, y, hpMul, dmgMul);
         }
       },
+      offerUpgrade: () => openUpgradeOffer(sim),
       killAll: () => {
         const e = sim.enemies;
         for (let i = 0; i < e.count; i++) damageEnemy(sim, i, 1e9);
@@ -196,6 +201,11 @@ async function main() {
           else if (ev.type === 'doom') hud.showBanner('Doom has awakened', 'doom', 3000);
           else if (ev.type === 'revive') hud.showBanner('Phoenix Heart! Reborn from the ashes', 'boss', 2200);
         }
+      }
+      // An upgrade choice pauses the sim; show it once, and don't let time pile up behind it.
+      if (sim.offer) {
+        accumulator = 0;
+        if (!upgradeWindow.isOpen) upgradeWindow.show(sim.offer, sim.upgrades, sim.offerCount);
       }
       // Couldn't keep up (very high debug speed): drop the backlog instead of spiraling.
       if (accumulator >= DT) accumulator %= DT;

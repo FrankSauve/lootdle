@@ -155,6 +155,7 @@ export class Hud {
       ['Bosses defeated', String(s.bossesDefeated)],
       ['Damage dealt', Math.round(s.damageDealt).toLocaleString()],
       ['Damage taken', Math.round(s.damageTaken).toLocaleString()],
+      ['Upgrades picked', String(state.picked.length)],
     ];
     const loadout = state.loadout;
     q(this.results, '.hud-results-build').textContent = loadout.buildName;

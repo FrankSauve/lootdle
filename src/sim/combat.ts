@@ -1,6 +1,7 @@
 import { ARENA_HEIGHT, ARENA_WIDTH, DT } from './config.ts';
 import { SRC_WEAPON, applyHitEffects, explode, onEnemyKilled, stormStrike } from './effects.ts';
 import { ENEMY_DEFS, EnemyKind, MAX_ENEMY_RADIUS } from './enemies.ts';
+import { MAX_ARMOR } from './upgrades.ts';
 import { ENEMY_SHOT_RADIUS } from './enemyShots.ts';
 import type { SimState } from './state.ts';
 
@@ -214,7 +215,7 @@ export function hurtPlayer(state: SimState, damage: number): void {
 
   // A ready barrier soaks the whole hit; Bastion halves damage while standing still.
   const still = p.x === p.prevX && p.y === p.prevY;
-  let taken = damage * b.damageTakenMul * (still ? b.bastionMul : 1);
+  let taken = damage * b.damageTakenMul * (1 - Math.min(MAX_ARMOR, state.upgrades.armor)) * (still ? b.bastionMul : 1);
   if (b.barrierCooldown > 0 && state.barrierTimer <= 0) {
     state.barrierTimer = b.barrierCooldown;
     state.events.push({ type: 'blocked' });

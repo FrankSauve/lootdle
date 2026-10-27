@@ -19,6 +19,8 @@ export interface DebugHost {
   loadPlayerLoot(name: string): void;
   resetLoot(): void;
   killAll(): void;
+  /** Opens an upgrade choice right now. */
+  offerUpgrade(): void;
   /** Spawns `count` enemies of the given kind near the player. */
   spawn(kind: number, count: number): void;
 }
@@ -73,6 +75,7 @@ export class DebugMenu {
       </div>
       <div class="debug-row">
         <button type="button" class="debug-kill">Kill all enemies</button>
+        <button type="button" class="debug-upgrade">Upgrade now</button>
       </div>
       <pre class="debug-info"></pre>
     `;
@@ -117,6 +120,7 @@ export class DebugMenu {
     }
     q('.debug-spawn').addEventListener('click', () => host.spawn(Number(kind.value), 1));
     q('.debug-spawn-pack').addEventListener('click', () => host.spawn(Number(kind.value), 10));
+    q('.debug-upgrade').addEventListener('click', () => host.offerUpgrade());
     q('.debug-kill').addEventListener('click', () => host.killAll());
 
     window.addEventListener('keydown', (e) => {

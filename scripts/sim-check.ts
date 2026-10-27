@@ -11,8 +11,9 @@ import { compileBuild } from '../src/sim/build.ts';
 import { ENEMY_DEFS, EnemyKind } from '../src/sim/enemies.ts';
 import { RARITY_NAMES, SIGNATURES, SYNERGIES } from '../src/sim/items.ts';
 import type { SignatureId, SynergyId } from '../src/sim/items.ts';
+import { UPGRADES, makeOffer } from '../src/sim/upgrades.ts';
 import { createRng } from '../src/sim/rng.ts';
-import { DT, TICK_RATE, createSim, elapsedSeconds, stepSim } from '../src/sim/sim.ts';
+import { DT, TICK_RATE, chooseUpgrade, createSim, elapsedSeconds, stepSim } from '../src/sim/sim.ts';
 import { generateLoadout } from '../src/sim/sim.ts';
 import type { Loadout, MoveInput, SimState } from '../src/sim/sim.ts';
 
@@ -72,6 +73,7 @@ function run(maxSeconds: number, godMode: boolean, playerSeed = PLAYER_SEED, loa
   const maxTicks = maxSeconds * TICK_RATE;
 
   while (!state.over && state.tick < maxTicks) {
+    if (state.offer) chooseUpgrade(state, 0); // the scripted player always takes the first upgrade
     const t0 = performance.now();
     stepSim(state, input(state));
     const dt = performance.now() - t0;
@@ -240,6 +242,7 @@ console.log(`Signatures and synergies: all ${everything.length} rolled and ran c
     let spawned = 0;
     let blasts = 0;
     for (let t = 0; t < 20 * TICK_RATE; t++) {
+      if (sim.offer) chooseUpgrade(sim, 0);
       const before = sim.enemies.count;
       stepSim(sim, { x: Math.sin(t / 90) > 0 ? 1 : -1, y: 0 });
       shots = Math.max(shots, sim.enemyShots.count);
@@ -261,6 +264,57 @@ console.log(`Signatures and synergies: all ${everything.length} rolled and ran c
     console.log(`  ${ENEMY_DEFS[kind].name.padEnd(12)} max shots ${shots}, max spawned/tick ${spawned}, blasts ${blasts}`);
   }
   console.log(`Enemy roster: all ${names.length} kinds ran cleanly`);
+}
+
+// Upgrades: offers are deterministic, respect weapon type and minimum rarity, and the game
+// pauses on schedule until one is picked.
+{
+  const a = makeOffer(777, 3, false);
+  const b = makeOffer(777, 3, false);
+  if (JSON.stringify(a) !== JSON.stringify(b)) {
+    console.log('Upgrade offers are not deterministic');
+    failed = true;
+  }
+  const seen = new Set<string>();
+  for (let n = 1; n <= 400; n++) {
+    for (const melee of [false, true]) {
+      const offer = makeOffer(n * 31, n, melee);
+      if (new Set(offer.map((o) => o.stat)).size !== 3) {
+        console.log('Upgrade offer has duplicate stats');
+        failed = true;
+      }
+      for (const o of offer) {
+        const def = UPGRADES[o.stat];
+        if (o.rarity < def.minRarity || (melee && def.rangedOnly) || !(def.values[o.rarity]! > 0)) {
+          console.log(`Illegal upgrade option ${o.stat} at rarity ${o.rarity} (melee ${melee})`);
+          failed = true;
+        }
+        seen.add(`${o.stat}:${o.rarity}`);
+      }
+    }
+  }
+  const sim = createSim({ worldSeed: WORLD_SEED, playerSeed: 5, godMode: true });
+  let offers = 0;
+  let pausedAt = -1;
+  for (let t = 0; t < 95 * TICK_RATE; t++) {
+    if (sim.offer) {
+      offers++;
+      if (pausedAt < 0) pausedAt = sim.tick;
+      const tick = sim.tick;
+      stepSim(sim, { x: 1, y: 0 });
+      if (sim.tick !== tick) {
+        console.log('Game did not pause while an upgrade was on offer');
+        failed = true;
+      }
+      chooseUpgrade(sim, offers % 3);
+    }
+    stepSim(sim, { x: 1, y: 0 });
+  }
+  if (offers !== 3 || pausedAt !== 30 * TICK_RATE) {
+    console.log(`Expected 3 upgrade offers by 1:35 with the first at 0:30, got ${offers} (first at tick ${pausedAt})`);
+    failed = true;
+  }
+  console.log(`Upgrades: deterministic, ${seen.size} stat/rarity combinations offered, pause and schedule OK`);
 }
 
 function correlation(pts: { loot: number; survived: number }[]): number {

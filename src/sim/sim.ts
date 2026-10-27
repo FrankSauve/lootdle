@@ -15,7 +15,7 @@ import {
   updatePlayerContact,
   updateProjectiles,
 } from './combat.ts';
-import { ARENA_HEIGHT, ARENA_WIDTH, DT, GRID_CELL_SIZE, MAX_ENEMIES } from './config.ts';
+import { ARENA_HEIGHT, ARENA_WIDTH, DT, GRID_CELL_SIZE, MAX_ENEMIES, TICK_RATE } from './config.ts';
 import { compileBuild } from './build.ts';
 import { updateDirector } from './director.ts';
 import { tickAuras, tickBuild, tickStatuses } from './effects.ts';
@@ -27,6 +27,7 @@ import { generateLoadout } from './loot.ts';
 import type { Loadout } from './loot.ts';
 import { ProjectilePool } from './projectiles.ts';
 import { createRng } from './rng.ts';
+import { UPGRADE_INTERVAL_SECONDS, emptyTotals, openUpgradeOffer } from './upgrades.ts';
 import type { MoveInput, SimState } from './state.ts';
 import { createWeapon, updateWeapon } from './weapons.ts';
 
@@ -34,6 +35,7 @@ export * from './config.ts';
 export type { MoveInput, SimEvent, SimState } from './state.ts';
 export type { Loadout } from './loot.ts';
 export { generateLoadout } from './loot.ts';
+export { chooseUpgrade, openUpgradeOffer } from './upgrades.ts';
 
 export interface SimOptions {
   /** Seed for the shared daily schedule (derived from the date). */
@@ -55,6 +57,11 @@ export function createSim(options: SimOptions): SimState {
     godMode: options.godMode ?? false,
     worldRng: createRng(options.worldSeed),
     playerRng: createRng(options.playerSeed),
+    seed: options.playerSeed,
+    upgrades: emptyTotals(),
+    offer: null,
+    offerCount: 0,
+    picked: [],
     loadout,
     build,
     player: {
@@ -100,8 +107,15 @@ export function elapsedSeconds(state: SimState): number {
   return state.tick * DT;
 }
 
+const UPGRADE_INTERVAL_TICKS = UPGRADE_INTERVAL_SECONDS * TICK_RATE;
+
 export function stepSim(state: SimState, input: MoveInput): void {
   if (state.over) return;
+  // Paused while the player is choosing an upgrade.
+  if (state.offer) {
+    state.events.length = 0;
+    return;
+  }
   state.events.length = 0;
   state.explosionsThisTick = 0;
   state.zapsThisTick = 0;
@@ -132,6 +146,7 @@ export function stepSim(state: SimState, input: MoveInput): void {
   state.enemyShots.compact();
 
   state.tick++;
+  if (state.tick % UPGRADE_INTERVAL_TICKS === 0 && state.player.hp > 0) openUpgradeOffer(state);
 
   if (state.player.hp <= 0) {
     state.over = true;

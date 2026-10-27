@@ -5,6 +5,7 @@ import type { EnemyShotPool } from './enemyShots.ts';
 import type { Loadout } from './loot.ts';
 import type { ProjectilePool } from './projectiles.ts';
 import type { Rng } from './rng.ts';
+import type { UpgradeOption, UpgradeTotals } from './upgrades.ts';
 
 /** Movement intent for one tick; each axis in the range -1..1. */
 export interface MoveInput {
@@ -86,6 +87,14 @@ export interface SimState {
   worldRng: Rng;
   /** Per-player stream: loot and upgrades (used once those systems exist). */
   playerRng: Rng;
+
+  /** The player's seed (upgrade offers are derived from it). */
+  seed: number;
+  /** Stat upgrades picked so far, the choice currently on offer (the sim is paused while set), and history. */
+  upgrades: UpgradeTotals;
+  offer: UpgradeOption[] | null;
+  offerCount: number;
+  picked: UpgradeOption[];
 
   /** Today's equipment and the numbers compiled from it. */
   loadout: Loadout;

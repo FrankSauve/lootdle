@@ -17,6 +17,11 @@ function itemLine(item: Item): string {
   return `${RARITY_SQUARES[item.rarity]} ${item.name} (${RARITY_NAMES[item.rarity]})${star}`;
 }
 
+/** One square per upgrade, colored by its rarity, e.g. " 🟩🟦⬜" (empty when none were picked). */
+function upgradeSquares(state: SimState): string {
+  return state.picked.length === 0 ? '' : ` ${state.picked.map((o) => RARITY_SQUARES[o.rarity]).join('')}`;
+}
+
 export function buildShareText(state: SimState, dateLabel: string, seconds: number): string {
   const { loadout, stats } = state;
   const items = [loadout.weapon, loadout.armor, loadout.trinket];
@@ -27,6 +32,7 @@ export function buildShareText(state: SimState, dateLabel: string, seconds: numb
     `⏱️ Survived ${formatTime(seconds)}`,
     `💀 ${stats.kills.toLocaleString()} kills · 👑 ${stats.bossesDefeated} bosses`,
     `⚔️ ${Math.round(stats.damageDealt).toLocaleString()} damage dealt`,
+    `\u2B06\uFE0F ${state.picked.length} upgrades${upgradeSquares(state)}`,
     '',
     ...items.map(itemLine),
   ];

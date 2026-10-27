@@ -295,7 +295,8 @@ export function tickStatuses(state: SimState): void {
 export function tickBuild(state: SimState): void {
   const b = state.build;
   const p = state.player;
-  if (b.regen > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + b.regen * DT);
+  const regen = b.regen + state.upgrades.regen;
+  if (regen > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + regen * DT);
   if (state.barrierTimer > 0) state.barrierTimer = Math.max(0, state.barrierTimer - DT);
 }
 
