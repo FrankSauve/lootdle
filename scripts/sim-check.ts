@@ -193,7 +193,7 @@ for (let seed = 1; seed <= 3000; seed++) {
 }
 const s = run(240, true, 1, stress);
 console.log(
-  `Stress loadout "${stress!.buildName}" (${stress!.weapon.name} / ${stress!.armor.name} / ${stress!.trinket.name} +2): ` +
+  `Stress loadout "${stress!.buildName}" (${stress!.weapon.name} / ${stress!.armor.name} / ${stress!.trinket.name} / ${stress!.helmet.name} / ${stress!.boots.name}): ` +
     `${s.stats.kills} kills in ${fmt(s.survived)}, ${s.avgTickMs.toFixed(3)} ms/tick avg, ` +
     `${s.slowestTickMs.toFixed(2)} ms slowest`,
 );
@@ -236,14 +236,16 @@ console.log(`Signatures and synergies: all ${everything.length} rolled and ran c
   const item = (
     slot: Item['slot'], id: string, effects: EffectId[], signature: SignatureId | null = null, power = 2.4,
   ): Item => ({ slot, id, name: id, rarity: 4, power, effects, quirk: null, signature });
-  const make = (weapon: Item, armor: Item, trinket: Item, extras: Item[] = []): Loadout => {
-    const items = [weapon, armor, trinket, ...extras];
+  const make = (weapon: Item, armor: Item, trinket: Item, helmet = plainHelmet, boots = plainBoots): Loadout => {
+    const items = [weapon, helmet, armor, boots, trinket];
     return {
-      seed: 1, weapon, armor, trinket, extras, buildName: 'test', family: 'apocalypse',
+      seed: 1, weapon, armor, trinket, helmet, boots, buildName: 'test', family: 'apocalypse',
       synergies: findSynergies(items), bestRarity: 4,
     };
   };
   const plainArmor = item('armor', 'mail', []);
+  const plainHelmet = item('helmet', 'ironhelm', []);
+  const plainBoots = item('boots', 'greaves', []);
   const plainTrinket = item('trinket', 'idol', ['might']);
   for (const w of WEAPONS) {
     const l = make(item('weapon', w.id, ['burn', 'poison']), plainArmor, plainTrinket);

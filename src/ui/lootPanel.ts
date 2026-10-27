@@ -1,13 +1,13 @@
 import { itemIcon } from '../render/art/icons.ts';
 import type { PixelImage } from '../render/art/pixels.ts';
-import { ARMORS, RARITY_COLORS, RARITY_NAMES, SYNERGIES, TRINKETS, WEAPONS } from '../sim/items.ts';
-import type { Item } from '../sim/items.ts';
+import { ARMORS, BOOTS, HELMETS, RARITY_COLORS, RARITY_NAMES, SYNERGIES, TRINKETS, WEAPONS } from '../sim/items.ts';
+import type { Item, Slot } from '../sim/items.ts';
 import { describeItem, loadoutItems } from '../sim/loot.ts';
 import type { Loadout } from '../sim/loot.ts';
 
 /** Height of one reel cell in CSS pixels (keep in sync with .reel-cell in style.css). */
 const CELL_H = 132;
-const POOLS = { weapon: WEAPONS, armor: ARMORS, trinket: TRINKETS } as const;
+const POOLS = { weapon: WEAPONS, armor: ARMORS, helmet: HELMETS, boots: BOOTS, trinket: TRINKETS } as const;
 /** Reel i spins for this long (ms) before it lands; they land one after another. */
 const reelDuration = (i: number) => 1500 + i * 700;
 const reelCells = (i: number) => 24 + i * 8;
@@ -17,7 +17,7 @@ const easeOutBack = (p: number) => {
   return 1 + c3 * (p - 1) ** 3 + c1 * (p - 1) ** 2;
 };
 
-const SLOT_LABELS = { weapon: 'Weapon', armor: 'Armor', trinket: 'Trinket' } as const;
+const SLOT_LABELS = { weapon: 'Weapon', armor: 'Armor', helmet: 'Helmet', boots: 'Boots', trinket: 'Trinket' } as const;
 
 export function cssColor(rgb: number): string {
   return `#${rgb.toString(16).padStart(6, '0')}`;
@@ -209,7 +209,7 @@ export class LootPanel {
     this.root.hidden = false;
   }
 
-  private reelCell(slot: 'weapon' | 'armor' | 'trinket', id: string, rarity: number | null): HTMLElement {
+  private reelCell(slot: Slot, id: string, rarity: number | null): HTMLElement {
     const cell = document.createElement('div');
     cell.className = 'reel-cell';
     const icon = document.createElement('div');

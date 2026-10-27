@@ -5,6 +5,7 @@
  */
 import { createImage, fillRect, fromAscii, setPixel, shade } from './pixels.ts';
 import type { PixelImage } from './pixels.ts';
+import type { Slot } from '../../sim/items.ts';
 
 const SIZE = 14;
 const OUTLINE = 0x14101c;
@@ -17,7 +18,7 @@ const WOOD = 0x9a6a3a;
 const WOOD_DARK = 0x6b4426;
 
 /** Weapon, armor and trinket archetype ids → icon. */
-export function itemIcon(slot: 'weapon' | 'armor' | 'trinket', id: string): PixelImage {
+export function itemIcon(slot: Slot, id: string): PixelImage {
   const key = `${slot}:${id}`;
   let img = cache.get(key);
   if (!img) {
@@ -28,7 +29,7 @@ export function itemIcon(slot: 'weapon' | 'armor' | 'trinket', id: string): Pixe
 }
 const cache = new Map<string, PixelImage>();
 
-function draw(slot: 'weapon' | 'armor' | 'trinket', id: string): PixelImage {
+function draw(slot: Slot, id: string): PixelImage {
   if (slot === 'weapon') {
     switch (id) {
       case 'dagger': return dagger();
@@ -42,6 +43,24 @@ function draw(slot: 'weapon' | 'armor' | 'trinket', id: string): PixelImage {
       case 'gauntlet': return gauntlet();
       case 'cannon': return cannon();
       case 'discs': return discs();
+    }
+  } else if (slot === 'helmet') {
+    switch (id) {
+      case 'ironhelm': return helm(0x9aa6c0);
+      case 'horned': return helm(0xb89968, 'horns');
+      case 'crown': return helm(0xffc94a, 'crown');
+      case 'hood': return hood(0x3a3f66);
+      case 'circlet': return helm(0x6fa8ff, 'gem');
+      case 'mask': return mask();
+    }
+  } else if (slot === 'boots') {
+    switch (id) {
+      case 'swiftboots': return boot(0x44a0e8, 'wing');
+      case 'greaves': return boot(0x8d97ab);
+      case 'spurs': return boot(0x7a4a2a, 'spikes');
+      case 'stompers': return boot(0x5a5f73, 'heavy');
+      case 'cinder': return boot(0xe0642b, 'flame');
+      case 'wanderer': return boot(0x6aa05a);
     }
   } else if (slot === 'armor') {
     switch (id) {
@@ -258,6 +277,111 @@ function quiver(): PixelImage {
     setPixel(i, x, 2, 0xe5334b);
   }
   return i;
+}
+
+// --- helmets and boots ---
+
+function helm(main: number, extra: 'horns' | 'crown' | 'gem' | null = null): PixelImage {
+  const light = shade(main, 1.35);
+  const dark = shade(main, 0.6);
+  const img = fromAscii('helm', [
+    '..............',
+    '....aaaaaa....',
+    '...alaaaaaa...',
+    '..alaaaaaaaa..',
+    '..aaaaaaaaaa..',
+    '..aaaaaaaaaa..',
+    '..adddddddda..',
+    '..add.dd.dda..',
+    '..aa......aa..',
+    '..aa......aa..',
+    '..............',
+    '..............',
+    '..............',
+    '..............',
+  ], { a: main, l: light, d: dark });
+  if (extra === 'horns') {
+    for (const [x, y] of [[1, 3], [0, 2], [0, 1], [12, 3], [13, 2], [13, 1]] as const) setPixel(img, x, y, 0xf2ead2);
+  } else if (extra === 'crown') {
+    for (const x of [3, 6, 9]) fillRect(img, x, 0, 2, 2, 0xffe27a);
+  } else if (extra === 'gem') {
+    fillRect(img, 6, 3, 2, 2, 0xffe14a);
+    setPixel(img, 6, 3, WHITE);
+  }
+  return img;
+}
+
+function hood(main: number): PixelImage {
+  const light = shade(main, 1.5);
+  const dark = shade(main, 0.6);
+  return fromAscii('hood', [
+    '.....aaaa.....',
+    '....aaaaaa....',
+    '...aaaaaaaa...',
+    '..aaaddddaaa..',
+    '..aaddddddaa..',
+    '..aadd..ddaa..',
+    '..aadd..ddaa..',
+    '..aaadddddaa..',
+    '...aaaaaaaa...',
+    '....llaaaa....',
+    '..............',
+    '..............',
+    '..............',
+    '..............',
+  ], { a: main, l: light, d: dark === main ? 0x000000 : 0x14101c });
+}
+
+function mask(): PixelImage {
+  return fromAscii('mask', [
+    '..............',
+    '...wwwwwwww...',
+    '..wwwwwwwwww..',
+    '..wwwwwwwwww..',
+    '..wkkwwwwkkw..',
+    '..wkkwwwwkkw..',
+    '..wwwwddwwww..',
+    '...wwwddwww...',
+    '...wkwkwkww...',
+    '....wwwwww....',
+    '..............',
+    '..............',
+    '..............',
+    '..............',
+  ], { w: 0xe8e0c8, k: 0x14101c, d: 0xa89f86 });
+}
+
+function boot(main: number, extra: 'wing' | 'spikes' | 'heavy' | 'flame' | null = null): PixelImage {
+  const light = shade(main, 1.4);
+  const dark = shade(main, 0.6);
+  const img = fromAscii('boot', [
+    '..............',
+    '....aaaa......',
+    '....alaa......',
+    '....aaaa......',
+    '....aaaa......',
+    '....aaaa......',
+    '....aaaaaa....',
+    '....aaaaaaaa..',
+    '...aaaaaaaaaa.',
+    '..aaaaaaaaaaa.',
+    '..dddddddddd..',
+    '..dddddddddd..',
+    '..............',
+    '..............',
+  ], { a: main, l: light, d: dark });
+  if (extra === 'wing') {
+    for (const [x, y] of [[2, 3], [1, 2], [2, 2], [1, 4], [2, 4]] as const) setPixel(img, x, y, WHITE);
+  } else if (extra === 'spikes') {
+    for (const x of [3, 6, 9]) setPixel(img, x, 12, 0xe8e0d0);
+    setPixel(img, 8, 5, 0xe8e0d0);
+  } else if (extra === 'heavy') {
+    fillRect(img, 4, 5, 4, 1, 0x9aa0b5);
+  } else if (extra === 'flame') {
+    for (const [x, y] of [[9, 5], [10, 4], [9, 3]] as const) setPixel(img, x, y, 0xffc94a);
+    setPixel(img, 10, 5, 0xff6a2b);
+  }
+  return img;
 }
 
 // --- armor ---

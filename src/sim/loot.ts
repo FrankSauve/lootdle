@@ -4,6 +4,10 @@
  */
 import {
   ARMORS,
+  BOOTS,
+  BOOT_EFFECTS,
+  HELMETS,
+  HELMET_EFFECTS,
   DEFENSIVE_EFFECTS,
   EFFECTS,
   EXTRA_EFFECTS,
@@ -19,10 +23,12 @@ import {
   TRINKET_EFFECTS,
   WEAPONS,
   armorById,
+  bootsById,
+  helmetById,
   weaponById,
   weaponRarityBonus,
 } from './items.ts';
-import type { EffectId, Family, Item, QuirkId, Rarity, SignatureId, Slot, SynergyId } from './items.ts';
+import type { ArmorArchetype, EffectId, Family, Item, QuirkId, Rarity, SignatureId, Slot, SynergyId } from './items.ts';
 import { createRng, hashSeed } from './rng.ts';
 import type { Rng } from './rng.ts';
 
@@ -31,8 +37,8 @@ export interface Loadout {
   weapon: Item;
   armor: Item;
   trinket: Item;
-  /** Two more trinkets (a 5-item loadout), always different kinds from the first. */
-  extras: Item[];
+  helmet: Item;
+  boots: Item;
   /** Fun name for the whole build, e.g. "The Walking Plague". */
   buildName: string;
   family: Family;
@@ -70,20 +76,15 @@ export function generateLoadout(playerSeed: number): Loadout {
 
   const weapon = rollWeapon(rng);
   const armor = rollArmor(rng);
-  const trinket = rollTrinket(rng, []);
-  const extras: Item[] = [];
-  const used = [trinket.id];
-  for (let k = 0; k < 2; k++) {
-    const extra = rollTrinket(rng, used);
-    used.push(extra.id);
-    extras.push(extra);
-  }
+  const trinket = rollTrinket(rng);
+  const helmet = rollWorn(rng, 'helmet', HELMETS, HELMET_EFFECTS);
+  const boots = rollWorn(rng, 'boots', BOOTS, BOOT_EFFECTS);
 
-  const items = [weapon, armor, trinket, ...extras];
+  const items = [weapon, helmet, armor, boots, trinket];
   const bestRarity = Math.max(...items.map((i) => i.rarity)) as Rarity;
   const { family, buildName } = nameBuild(items);
   const synergies = findSynergies(items);
-  return { seed: playerSeed >>> 0, weapon, armor, trinket, extras, buildName, family, synergies, bestRarity };
+  return { seed: playerSeed >>> 0, weapon, armor, trinket, helmet, boots, buildName, family, synergies, bestRarity };
 }
 
 function rollWeapon(rng: Rng): Item {
@@ -100,8 +101,20 @@ function rollArmor(rng: Rng): Item {
   return finishItem(rng, 'armor', base.id, base.name, rarity, [...base.innate, ...extras]);
 }
 
-function rollTrinket(rng: Rng, exclude: readonly string[]): Item {
-  const base = pick(rng, TRINKETS.filter((t) => !exclude.includes(t.id)));
+function rollWorn(
+  rng: Rng,
+  slot: 'helmet' | 'boots',
+  pool: readonly ArmorArchetype[],
+  effects: readonly EffectId[],
+): Item {
+  const base = pick(rng, pool);
+  const rarity = rollRarity(rng);
+  const extras = pickDistinct(rng, effects, EXTRA_EFFECTS[slot][rarity]!, base.innate);
+  return finishItem(rng, slot, base.id, base.name, rarity, [...base.innate, ...extras]);
+}
+
+function rollTrinket(rng: Rng): Item {
+  const base = pick(rng, TRINKETS);
   const rarity = rollRarity(rng);
   const extras = pickDistinct(rng, TRINKET_EFFECTS, EXTRA_EFFECTS.trinket[rarity]!, [base.effect]);
   return finishItem(rng, 'trinket', base.id, base.name, rarity, [base.effect, ...extras]);
@@ -143,7 +156,7 @@ function finishItem(
 
   // Name: a quirk prefix wins over an effect adjective; high rarities add a flavorful suffix.
   // Only effects that were rolled as affixes name the item (not its defining innate effect).
-  const innateCount = slot === 'armor' ? armorById(id).innate.length : slot === 'trinket' ? 1 : 0;
+  const innateCount = slot === 'trinket' ? 1 : slot === 'weapon' ? 0 : wornById(slot, id).innate.length;
   const rolled = effects.slice(innateCount);
   const adjective = rolled.length > 0 ? EFFECTS[rolled[0]!].adjective : null;
   const prefix = signature ? SIGNATURES[signature].prefix : quirk ? QUIRKS[quirk].prefix : adjective;
@@ -225,7 +238,12 @@ function nameBuild(items: readonly Item[]): { family: Family; buildName: string 
 /** Human-readable lines for the loot cards. */
 /** All five items in the loadout, in display order. */
 export function loadoutItems(l: Loadout): Item[] {
-  return [l.weapon, l.armor, l.trinket, ...l.extras];
+  return [l.weapon, l.helmet, l.armor, l.boots, l.trinket];
+}
+
+/** Armor, helmet or boots archetype for an item. */
+export function wornById(slot: 'armor' | 'helmet' | 'boots', id: string): ArmorArchetype {
+  return slot === 'armor' ? armorById(id) : slot === 'helmet' ? helmetById(id) : bootsById(id);
 }
 
 export interface ItemDescription {
@@ -254,8 +272,8 @@ export function describeItem(item: Item): ItemDescription {
           `${Math.round((bonus.size - 1) * 100)}% bigger`,
       );
     }
-  } else if (item.slot === 'armor') {
-    const a = armorById(item.id);
+  } else if (item.slot !== 'trinket') {
+    const a = wornById(item.slot, item.id);
     if (a.hp > 0) stats.push(`+${a.hp} max HP`);
     if (a.speedMul !== 1) {
       const p = Math.round((a.speedMul - 1) * 100);

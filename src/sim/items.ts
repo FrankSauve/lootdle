@@ -7,7 +7,7 @@
  * (which turns items into numbers the sim uses) and the UI (which describes items) all agree.
  */
 
-export type Slot = 'weapon' | 'armor' | 'trinket';
+export type Slot = 'weapon' | 'armor' | 'helmet' | 'boots' | 'trinket';
 
 export type Rarity = 0 | 1 | 2 | 3 | 4;
 export const RARITY_NAMES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'] as const;
@@ -235,12 +235,12 @@ export interface QuirkDef {
 }
 
 export const QUIRKS: Record<QuirkId, QuirkDef> = {
-  brittle: { label: 'Brittle', prefix: 'Brittle', text: '-20% max HP', slots: ['armor', 'trinket'] },
-  heavy: { label: 'Heavy', prefix: 'Leaden', text: '-15% move speed', slots: ['armor', 'trinket'] },
-  clumsy: { label: 'Clumsy', prefix: 'Clumsy', text: 'Attacks 25% slower', slots: ['weapon', 'trinket'] },
-  fragile: { label: 'Fragile', prefix: 'Glass', text: '+30% damage taken', slots: ['armor', 'trinket'] },
+  brittle: { label: 'Brittle', prefix: 'Brittle', text: '-20% max HP', slots: ['armor', 'helmet', 'boots', 'trinket'] },
+  heavy: { label: 'Heavy', prefix: 'Leaden', text: '-15% move speed', slots: ['armor', 'helmet', 'boots', 'trinket'] },
+  clumsy: { label: 'Clumsy', prefix: 'Clumsy', text: 'Attacks 25% slower', slots: ['weapon', 'helmet', 'trinket'] },
+  fragile: { label: 'Fragile', prefix: 'Glass', text: '+30% damage taken', slots: ['armor', 'helmet', 'boots', 'trinket'] },
   bloodPrice: { label: 'Blood price', prefix: 'Bloodthirsty', text: 'Lose 1 HP per volley', slots: ['weapon'] },
-  jittery: { label: 'Jittery', prefix: 'Jittery', text: 'Shots fly wildly off target', slots: ['weapon', 'trinket'] },
+  jittery: { label: 'Jittery', prefix: 'Jittery', text: 'Shots fly wildly off target', slots: ['weapon', 'helmet', 'trinket'] },
 };
 
 export interface WeaponArchetype {
@@ -345,6 +345,45 @@ export const ARMORS: readonly ArmorArchetype[] = [
   { id: 'aegis', name: 'Aegis Vest', hp: 15, speedMul: 1, innate: ['barrier'] },
 ];
 
+/** Helmets lean offensive (they carry rule-benders), boots lean mobile. Both are armor-shaped. */
+export const HELMETS: readonly ArmorArchetype[] = [
+  { id: 'ironhelm', name: 'Iron Helm', hp: 25, speedMul: 1, innate: [] },
+  { id: 'horned', name: 'Horned Helm', hp: 15, speedMul: 1, innate: ['might'] },
+  { id: 'crown', name: "Warlord's Crown", hp: 0, speedMul: 1, innate: ['haste'] },
+  { id: 'hood', name: 'Shadow Hood', hp: 5, speedMul: 1.05, innate: ['reach'] },
+  { id: 'circlet', name: 'Storm Circlet', hp: 0, speedMul: 1, innate: ['shock'] },
+  { id: 'mask', name: 'Bone Mask', hp: 10, speedMul: 1, innate: ['lifesteal'] },
+];
+
+export const BOOTS: readonly ArmorArchetype[] = [
+  { id: 'swiftboots', name: 'Swift Boots', hp: 0, speedMul: 1.12, innate: ['swift'] },
+  { id: 'greaves', name: 'Iron Greaves', hp: 20, speedMul: 0.95, innate: ['fortified'] },
+  { id: 'spurs', name: 'Spiked Boots', hp: 5, speedMul: 1.02, innate: ['thorns'] },
+  { id: 'stompers', name: 'Quake Stompers', hp: 10, speedMul: 0.98, innate: ['knockback'] },
+  { id: 'cinder', name: 'Cinder Treads', hp: 0, speedMul: 1.05, innate: ['burn'] },
+  { id: 'wanderer', name: "Wanderer's Boots", hp: 5, speedMul: 1.08, innate: ['regen'] },
+];
+
+export const HELMET_EFFECTS: readonly EffectId[] = [
+  'might', 'haste', 'reach', 'echo', 'shock', 'burn', 'poison', 'knockback', 'explosion', 'lifesteal',
+  'frenzy', 'giant', 'fortified', 'regen',
+];
+export const BOOT_EFFECTS: readonly EffectId[] = [
+  'swift', 'regen', 'thorns', 'barrier', 'fortified', 'knockback', 'explosion', 'burn', 'poison', 'haste',
+];
+
+export function helmetById(id: string): ArmorArchetype {
+  const a = HELMETS.find((x) => x.id === id);
+  if (!a) throw new Error(`Unknown helmet "${id}"`);
+  return a;
+}
+
+export function bootsById(id: string): ArmorArchetype {
+  const a = BOOTS.find((x) => x.id === id);
+  if (!a) throw new Error(`Unknown boots "${id}"`);
+  return a;
+}
+
 export interface TrinketArchetype {
   id: string;
   name: string;
@@ -384,6 +423,8 @@ export const TRINKET_EFFECTS: readonly EffectId[] = [
 export const EXTRA_EFFECTS: Record<Slot, readonly number[]> = {
   weapon: [1, 1, 2, 3, 4],
   armor: [0, 1, 1, 2, 3],
+  helmet: [0, 1, 1, 2, 3],
+  boots: [0, 1, 1, 2, 2],
   trinket: [0, 0, 1, 2, 3],
 };
 
@@ -472,11 +513,11 @@ export const SIGNATURES: Record<SignatureId, SignatureDef> = {
     text: (m) => `Every ${sx.nova(m)}th attack unleashes a nova in all directions`,
   },
   executioner: {
-    title: 'Executioner', prefix: "Executioner's", slots: ['weapon'], implies: [],
+    title: 'Executioner', prefix: "Executioner's", slots: ['weapon', 'helmet'], implies: [],
     text: (m) => `Hits instantly finish enemies below ${pct(sx.execute(m))} HP`,
   },
   berserker: {
-    title: 'Berserker', prefix: "Berserker's", slots: ['weapon'], implies: [],
+    title: 'Berserker', prefix: "Berserker's", slots: ['weapon', 'helmet'], implies: [],
     text: (m) => `Up to +${pct(sx.berserker(m))} damage as your HP drops`,
   },
   orbit: {
@@ -484,15 +525,15 @@ export const SIGNATURES: Record<SignatureId, SignatureDef> = {
     text: (m) => `${sx.orbit(m).blades} blades orbit you, ${n(sx.orbit(m).dps)}/s each`,
   },
   phoenix: {
-    title: 'Phoenix Heart', prefix: 'Phoenix', slots: ['armor'], implies: [],
+    title: 'Phoenix Heart', prefix: 'Phoenix', slots: ['armor', 'helmet'], implies: [],
     text: (m) => `Once per run, death revives you at ${pct(sx.phoenix(m).heal)} HP with a huge blast`,
   },
   scorch: {
-    title: 'Scorching Aura', prefix: 'Scorching', slots: ['armor'], implies: [],
+    title: 'Scorching Aura', prefix: 'Scorching', slots: ['armor', 'boots'], implies: [],
     text: (m) => `Enemies near you burn for ${n(sx.scorch(m).dps)}/s`,
   },
   bastion: {
-    title: 'Bastion', prefix: 'Bastion', slots: ['armor'], implies: [],
+    title: 'Bastion', prefix: 'Bastion', slots: ['armor', 'boots'], implies: [],
     text: (m) => `Take ${pct(1 - sx.bastion(m))} less damage while standing still`,
   },
   plague: {
@@ -504,11 +545,11 @@ export const SIGNATURES: Record<SignatureId, SignatureDef> = {
     text: (m) => `Explosions heal ${sx.bloodsplosion(m)} HP per enemy hit (up to 6)`,
   },
   tesla: {
-    title: 'Tesla Storm', prefix: 'Tesla', slots: ['trinket'], implies: ['shock'],
+    title: 'Tesla Storm', prefix: 'Tesla', slots: ['trinket', 'helmet'], implies: ['shock'],
     text: (m) => `Shock arcs jump ${sx.tesla(m)} more times`,
   },
   vortex: {
-    title: 'Black Hole', prefix: 'Void', slots: ['trinket'], implies: [],
+    title: 'Black Hole', prefix: 'Void', slots: ['trinket', 'boots'], implies: [],
     text: (m) => `Every ${sx.vortex(m).every}s, drags enemies in and blasts them`,
   },
   meteors: {
@@ -518,12 +559,12 @@ export const SIGNATURES: Record<SignatureId, SignatureDef> = {
       `They carry your poison and fire`,
   },
   stormcaller: {
-    title: 'Stormcaller', prefix: 'Thunderous', slots: ['trinket', 'armor'], implies: [],
+    title: 'Stormcaller', prefix: 'Thunderous', slots: ['trinket', 'armor', 'helmet'], implies: [],
     text: (m) =>
       `Every second, lightning strikes ${sx.stormcaller(m).targets} foes across the screen (${n(sx.stormcaller(m).damage)} dmg)`,
   },
   bladestorm: {
-    title: 'Bladestorm', prefix: 'Storming', slots: ['weapon', 'trinket'], implies: [],
+    title: 'Bladestorm', prefix: 'Storming', slots: ['weapon', 'trinket', 'boots'], implies: [],
     text: (m) =>
       `${sx.bladestorm(m).blades} huge blades whirl around you, ${n(sx.bladestorm(m).dps)}/s each. They carry your poison and fire`,
   },

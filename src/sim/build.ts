@@ -2,7 +2,7 @@
  * Turns a loadout into the flat numbers the simulation uses ("the build").
  * Effects from different items stack additively; a few multipliers are capped.
  */
-import { armorById, fx, sx, weaponById, weaponRarityBonus } from './items.ts';
+import { armorById, bootsById, fx, helmetById, sx, weaponById, weaponRarityBonus } from './items.ts';
 import type { EffectId, Item, SignatureId } from './items.ts';
 import { loadoutItems } from './loot.ts';
 import type { Loadout } from './loot.ts';
@@ -100,6 +100,8 @@ export interface Build {
 export function compileBuild(loadout: Loadout): Build {
   const w = weaponById(loadout.weapon.id);
   const armor = armorById(loadout.armor.id);
+  const helmet = helmetById(loadout.helmet.id);
+  const boots = bootsById(loadout.boots.id);
 
   const rb = weaponRarityBonus(loadout.weapon.rarity);
   const b: Build = {
@@ -117,8 +119,8 @@ export function compileBuild(loadout: Loadout): Build {
     knockback: w.knockback,
     fan: w.fan ?? 0,
     impact: w.impact ?? 0,
-    maxHp: BASE_HP + armor.hp,
-    moveSpeed: BASE_SPEED * armor.speedMul,
+    maxHp: BASE_HP + armor.hp + helmet.hp + boots.hp,
+    moveSpeed: BASE_SPEED * armor.speedMul * helmet.speedMul * boots.speedMul,
     damageTakenMul: 1,
     regen: 0,
     bloodPrice: false,
