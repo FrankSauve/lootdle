@@ -109,7 +109,7 @@ async function main() {
   const hud = new Hud(container, playfield, () => newRun(), () => settingsWindow.open());
   const lootPanel = new LootPanel(container);
   const upgradeWindow = new UpgradeWindow(container, (i) => chooseUpgrade(sim, i));
-  const settingsWindow = new SettingsWindow(container, settings);
+  const settingsWindow = new SettingsWindow(container, settings, () => sim);
   newRun(true);
 
   // Developer tools: loaded only by the Vite dev server, never included in production builds.
@@ -171,7 +171,9 @@ async function main() {
 
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
-    if (e.code === 'Escape') settingsWindow.toggle();
+    if (e.code === 'Escape') {
+      if (!upgradeWindow.isOpen) settingsWindow.toggle(); // an upgrade choice must be made first
+    }
     else if (e.code === 'KeyR' && sim.over && !settingsWindow.isOpen) newRun();
   });
 
