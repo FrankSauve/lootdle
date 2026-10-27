@@ -31,6 +31,7 @@ const KITE_DISTANCE: Partial<Record<EnemyKind, number>> = {
   [EnemyKind.Spitter]: 250,
   [EnemyKind.Shaman]: 340,
   [EnemyKind.Lich]: 310,
+  [EnemyKind.Dragon]: 250,
 };
 
 const A = 0.9238795325112867;
@@ -81,7 +82,7 @@ export function moveEnemies(state: SimState): void {
       else if (len < kite - 70) forward = -0.8;
       let sx = 0;
       let sy = 0;
-      if (kind === EnemyKind.Lich) {
+      if (kind === EnemyKind.Lich || kind === EnemyKind.Dragon) {
         const side = e.id[i]! & 1 ? 1 : -1;
         sx = (-dy / len) * side * 0.55;
         sy = (dx / len) * side * 0.55;
@@ -163,6 +164,7 @@ export function updateEnemyAbilities(state: SimState): void {
       kind !== EnemyKind.Spitter &&
       kind !== EnemyKind.Shaman &&
       kind !== EnemyKind.Lich &&
+      kind !== EnemyKind.Dragon &&
       kind !== EnemyKind.HiveQueen
     ) {
       continue;
@@ -198,6 +200,39 @@ export function updateEnemyAbilities(state: SimState): void {
           fan(state, x, y, ux, uy, 250, e.damage[i]! * 0.8);
         }
         e.timer[i] = 2.0;
+        break;
+      }
+
+      case EnemyKind.Dragon: {
+        // Four attacks in turn: a wide fan of fire, a ring, three staggered fans, then a call for bombers.
+        // Below half health it enrages and attacks faster.
+        e.mode[i] = (e.mode[i]! + 1) & 3;
+        const dmg = e.damage[i]! * 0.6;
+        const phase = e.mode[i]!;
+        if (phase === 0) {
+          wideFan(state, x, y, ux, uy, 300, dmg);
+        } else if (phase === 1) {
+          shootRing(state, x, y, RING16, 200, dmg);
+          state.events.push({ type: 'enemyBlast', x, y, radius: 110, style: 0 });
+        } else if (phase === 2) {
+          fan(state, x, y, ux, uy, 230, dmg);
+          fan(state, x, y, ux, uy, 300, dmg);
+          fan(state, x, y, ux, uy, 370, dmg);
+        } else {
+          const t = state.tick * DT;
+          for (let k = 0; k < 6; k++) {
+            const [rx, ry] = RING16[(k * 3) % 16]!;
+            state.enemies.spawn(
+              EnemyKind.Bomber,
+              clampX(x + rx * 90),
+              clampY(y + ry * 90),
+              hpMultiplier(t),
+              damageMultiplier(t),
+            );
+          }
+          state.events.push({ type: 'enemyBlast', x, y, radius: 100, style: 2 });
+        }
+        e.timer[i] = e.hp[i]! < e.maxHp[i]! * 0.5 ? 1.3 : 1.9;
         break;
       }
 
@@ -256,6 +291,22 @@ function fan(state: SimState, x: number, y: number, ux: number, uy: number, spee
     [ux * C2 - uy * S2, uy * C2 + ux * S2],
   ];
   for (const [dx, dy] of shots) state.enemyShots.spawn(x, y, dx * speed, dy * speed, damage, SHOT_LIFE);
+}
+
+const C3 = 0.6216099682706644;
+const S3 = 0.7833269096274834;
+const C4 = 0.3623577544766736;
+const S4 = 0.9320390859672263;
+
+/** Nine shots spread across about 140 degrees, aimed at (ux, uy). */
+function wideFan(state: SimState, x: number, y: number, ux: number, uy: number, speed: number, damage: number): void {
+  const rot: readonly (readonly [number, number])[] = [
+    [1, 0], [C1, S1], [C2, S2], [C3, S3], [C4, S4],
+  ];
+  for (const [c, s] of rot) {
+    state.enemyShots.spawn(x, y, (ux * c + uy * s) * speed, (uy * c - ux * s) * speed, damage, SHOT_LIFE);
+    if (s !== 0) state.enemyShots.spawn(x, y, (ux * c - uy * s) * speed, (uy * c + ux * s) * speed, damage, SHOT_LIFE);
+  }
 }
 
 function clampX(x: number): number {

@@ -292,6 +292,7 @@ export interface ArtCatalog {
   juggernaut: SpriteArt;
   hiveQueen: SpriteArt;
   lich: SpriteArt;
+  dragon: SpriteArt;
   knife: PixelImage;
   torch: PixelImage[];
   /** 1x1 white pixel for particles. */
@@ -333,6 +334,7 @@ export function buildArtCatalog(): ArtCatalog {
     juggernaut: { frames: [more.juggernaut], shadowWidth: 40 },
     hiveQueen: { frames: [more.hiveQueen], shadowWidth: 36 },
     lich: { frames: [more.lich], shadowWidth: 38 },
+    dragon: { frames: more.dragon, shadowWidth: 110 },
     knife: fromAscii('knife', KNIFE, KNIFE_PALETTE),
     torch: [fromAscii('torch-a', TORCH_A, TORCH_PALETTE), fromAscii('torch-b', TORCH_B, TORCH_PALETTE)],
     pixel: (() => {
@@ -345,7 +347,7 @@ export function buildArtCatalog(): ArtCatalog {
   const shadows = new Map<number, PixelImage>();
   for (const s of [
     art.player, art.chaser, art.flanker, art.brute, art.slimelet, art.giantSlime,
-    art.rat, art.boar, art.spitter, art.bomber, art.knight, art.shaman, art.juggernaut, art.hiveQueen, art.lich,
+    art.rat, art.boar, art.spitter, art.bomber, art.knight, art.shaman, art.juggernaut, art.hiveQueen, art.lich, art.dragon,
   ]) {
     if (!shadows.has(s.shadowWidth)) {
       shadows.set(s.shadowWidth, ellipse(s.shadowWidth, Math.max(3, Math.round(s.shadowWidth * 0.35))));

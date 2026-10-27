@@ -2,7 +2,7 @@
  * Pixel art for the newer enemies and bosses, hand-placed as ASCII maps.
  * Bosses are drawn as a left half and mirrored (see mirror()).
  */
-import { fromAscii } from './pixels.ts';
+import { fromAscii, scaleNearest } from './pixels.ts';
 import type { PixelImage } from './pixels.ts';
 
 const OUTLINE = 0x1a1420;
@@ -89,11 +89,11 @@ const BOMBER = [
 
 const KNIGHT_PALETTE = {
   K: OUTLINE,
-  M: 0xb8bdd0,
-  m: 0x7d8299,
+  M: 0x6a5a82, // dark violet steel, so it can't be mistaken for the hero
+  m: 0x453a5c,
   E: 0xff4d6d,
-  S: 0x3a6fd9,
-  s: 0x24488f,
+  S: 0xb13a3a,
+  s: 0x7a2020,
   Y: 0xffc94a,
   b: 0x6b4423,
 };
@@ -268,6 +268,127 @@ const LICH_HALF = [
 ];
 const LICH = mirror(LICH_HALF);
 
+// ---------------------------------------------------------------------------------------------
+// Dragon: a huge winged red dragon seen from above, drawn procedurally as a left half and mirrored.
+// Two frames flap its wings.
+
+const DRAGON_PALETTE = {
+  K: OUTLINE,
+  R: 0xc23a2b,
+  r: 0x7a1f1a,
+  O: 0xf2a03a,
+  o: 0xc4701e,
+  H: 0xf3ecff,
+  E: 0xffe14a,
+  W: 0x8a2a3a,
+  w: 0x5a1a28,
+  T: 0xffffff,
+  F: 0xff7a2b,
+};
+
+function dragonHalf(flapUp: boolean): string[] {
+  const W = 34;
+  const H = 40;
+  const g: string[][] = Array.from({ length: H }, () => Array<string>(W).fill('.'));
+  const put = (x: number, y: number, c: string) => {
+    if (x >= 0 && x < W && y >= 0 && y < H) g[y]![x] = c;
+  };
+  const ellipse = (cx: number, cy: number, rx: number, ry: number, c: string) => {
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
+      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+        const dx = (x - cx) / rx;
+        const dy = (y - cy) / ry;
+        if (dx * dx + dy * dy <= 1) put(x, y, c);
+      }
+    }
+  };
+  const line = (x0: number, y0: number, x1: number, y1: number, c: string) => {
+    const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) || 1;
+    for (let s = 0; s <= steps; s++) put(Math.round(x0 + ((x1 - x0) * s) / steps), Math.round(y0 + ((y1 - y0) * s) / steps), c);
+  };
+  const tri = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number, c: string) => {
+    const sign = (px: number, py: number, qx: number, qy: number, rx: number, ry: number) =>
+      (px - rx) * (qy - ry) - (qx - rx) * (py - ry);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const d1 = sign(x, y, ax, ay, bx, by);
+        const d2 = sign(x, y, bx, by, cx, cy);
+        const d3 = sign(x, y, cx, cy, ax, ay);
+        const neg = d1 < 0 || d2 < 0 || d3 < 0;
+        const pos = d1 > 0 || d2 > 0 || d3 > 0;
+        if (!(neg && pos)) put(x, y, c);
+      }
+    }
+  };
+
+  // Wing: a membrane between three finger bones fanned out from the shoulder.
+  const sx = 25;
+  const sy = 17;
+  const tipY = flapUp ? 2 : 10;
+  const midY = flapUp ? 10 : 18;
+  const lowY = flapUp ? 24 : 30;
+  tri(sx, sy, 0, tipY, 3, midY, 'W');
+  tri(sx, sy, 3, midY, 5, lowY, 'W');
+  tri(sx, sy, 5, lowY, 17, lowY + 4, 'W');
+  // Darker lower membrane for depth.
+  tri(sx, sy + 1, 3, midY + 1, 5, lowY, 'w');
+  line(sx, sy, 0, tipY, 'r');
+  line(sx, sy, 3, midY, 'r');
+  line(sx, sy, 5, lowY, 'r');
+  line(sx, sy, 17, lowY + 4, 'r');
+  tri(0, tipY, 3, tipY - 3, 3, tipY + 1, 'H');
+
+  // Tail: tapering to the bottom.
+  for (let y = 28; y < H; y++) {
+    const half = Math.max(1, Math.round(5 - (y - 28) * 0.45));
+    for (let x = 33 - half; x < W; x++) put(x, y, y % 4 === 0 ? 'r' : 'R');
+  }
+  tri(33, 39, 31, 35, 33, 35, 'H');
+
+  // Body, belly plates and back ridge.
+  ellipse(31, 21, 8, 11, 'R');
+  for (let y = 13; y < 32; y++) {
+    const band = (y - 13) % 3 === 0;
+    for (let x = 29; x < W; x++) put(x, y, band ? 'o' : 'O');
+  }
+  for (let y = 12; y < 32; y += 4) {
+    put(23, y, 'r');
+    put(24, y + 1, 'r');
+  }
+
+  // Legs with claws.
+  ellipse(23, 26, 3, 3, 'R');
+  line(21, 29, 20, 32, 'T');
+  line(23, 29, 23, 33, 'T');
+  line(25, 29, 26, 32, 'T');
+  ellipse(24, 15, 3, 3, 'R');
+
+  // Neck and head with horns, eyes and a toothy snout.
+  ellipse(31, 11, 5, 4, 'R');
+  ellipse(31, 6, 7, 5, 'R');
+  ellipse(31, 2, 4, 3, 'R');
+  tri(27, 4, 20, 0, 25, 6, 'H');
+  tri(27, 3, 24, 0, 28, 1, 'H');
+  put(27, 5, 'E');
+  put(28, 5, 'E');
+  put(27, 6, 'K');
+  put(29, 1, 'K');
+  for (const x of [27, 29, 31, 33]) put(x, 0, 'T');
+  put(33, 3, 'F');
+  put(32, 2, 'F');
+
+  // Dark outline around everything.
+  const out = g.map((row) => row.slice());
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (g[y]![x] !== '.') continue;
+      const near = [g[y - 1]?.[x], g[y + 1]?.[x], g[y]![x - 1], g[y]![x + 1]];
+      if (near.some((c) => c !== undefined && c !== '.')) out[y]![x] = 'K';
+    }
+  }
+  return out.map((row) => row.join(''));
+}
+
 export interface EnemyArt {
   rat: PixelImage;
   boar: PixelImage;
@@ -278,6 +399,7 @@ export interface EnemyArt {
   juggernaut: PixelImage;
   hiveQueen: PixelImage;
   lich: PixelImage;
+  dragon: PixelImage[];
 }
 
 export function buildEnemyArt(): EnemyArt {
@@ -291,5 +413,8 @@ export function buildEnemyArt(): EnemyArt {
     juggernaut: fromAscii('juggernaut', JUGGERNAUT, JUGG_PALETTE),
     hiveQueen: fromAscii('hive-queen', HIVE_QUEEN, QUEEN_PALETTE),
     lich: fromAscii('lich', LICH, LICH_PALETTE),
+    dragon: [true, false].map((up) =>
+      scaleNearest(fromAscii('dragon', mirror(dragonHalf(up)), DRAGON_PALETTE), 2),
+    ),
   };
 }

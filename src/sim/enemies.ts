@@ -15,6 +15,7 @@ export const EnemyKind = {
   Juggernaut: 11,
   HiveQueen: 12,
   Lich: 13,
+  Dragon: 14,
 } as const;
 export type EnemyKind = (typeof EnemyKind)[keyof typeof EnemyKind];
 
@@ -54,6 +55,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   [EnemyKind.Juggernaut]: def('Juggernaut', 800, 50, 40, 30, true, 0.7),
   [EnemyKind.HiveQueen]: def('Hive Queen', 650, 45, 34, 22, true),
   [EnemyKind.Lich]: def('Lich', 700, 60, 28, 24, true),
+  [EnemyKind.Dragon]: def('Dragon', 12000, 70, 70, 45, true, 0.8),
 };
 
 /** Largest radius of any enemy; used to pad spatial queries. */

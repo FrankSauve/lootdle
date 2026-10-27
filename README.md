@@ -125,3 +125,9 @@ The daily loot pool includes builds that fill the whole screen:
 - Signatures: Meteor Shower, Stormcaller (lightning on many foes at once), Bladestorm (6-8 huge orbiting
   blades), Splinter (hits burst into fragments), Fury Engine (huge attack speed, less damage) and Colossus
   (bigger and longer reaching). Meteors, lightning and blades carry your poison and fire.
+
+## Dragon
+
+A huge Dragon boss arrives at 5:00 and returns every minute, replacing that wave's regular boss. It
+circles the player and cycles four attacks (a wide fan of fire, a ring, three staggered fans, and a call
+for bombers), attacking faster below half health. Each visit it has 70% more health than the last.

@@ -59,6 +59,10 @@ const BOSS_ORDER: readonly EnemyKind[] = [
 ];
 const DOUBLE_BOSS_FROM = 5;
 
+/** The Dragon arrives at 5:00 and returns every minute, replacing that wave's regular boss. */
+const DRAGON_FIRST_TICK = 300 * TICK_RATE;
+const DRAGON_INTERVAL_TICKS = 60 * TICK_RATE;
+
 export function updateDirector(state: SimState): void {
   const tick = state.tick;
   const t = tick * DT;
@@ -68,7 +72,12 @@ export function updateDirector(state: SimState): void {
     state.events.push({ type: 'doom' });
   }
 
-  if (tick > 0 && tick % BOSS_INTERVAL_TICKS === 0) spawnBossWave(state, t, tick / BOSS_INTERVAL_TICKS);
+  const dragonTick = tick >= DRAGON_FIRST_TICK && (tick - DRAGON_FIRST_TICK) % DRAGON_INTERVAL_TICKS === 0;
+  if (dragonTick) {
+    spawnBoss(state, t, 1, EnemyKind.Dragon, 0, 1 + 0.7 * Math.floor((tick - DRAGON_FIRST_TICK) / DRAGON_INTERVAL_TICKS));
+  } else if (tick > 0 && tick % BOSS_INTERVAL_TICKS === 0) {
+    spawnBossWave(state, t, tick / BOSS_INTERVAL_TICKS);
+  }
   if (tick >= SWARM_FIRST_TICK && (tick - SWARM_FIRST_TICK) % SWARM_INTERVAL_TICKS === 0) spawnSwarm(state, t);
 
   state.spawnBudget += spawnRate(t) * DT;
@@ -174,7 +183,7 @@ function spawnBossWave(state: SimState, t: number, wave: number): void {
   }
 }
 
-function spawnBoss(state: SimState, t: number, wave: number, kind: EnemyKind, rank: number): void {
+function spawnBoss(state: SimState, t: number, wave: number, kind: EnemyKind, rank: number, hpOverride?: number): void {
   const number = ++state.bossesSpawned;
   const def = ENEMY_DEFS[kind];
   const r = def.radius;
@@ -190,7 +199,7 @@ function spawnBoss(state: SimState, t: number, wave: number, kind: EnemyKind, ra
   candidates.sort((a, b) => b.d - a.d);
   const best = candidates[rank % candidates.length]!.c;
 
-  const hpMul = (1 + 0.8 * (wave - 1)) * (state.doom ? 1.4 : 1);
+  const hpMul = hpOverride ?? (1 + 0.8 * (wave - 1)) * (state.doom ? 1.4 : 1);
   state.enemies.spawn(kind, best.x, best.y, hpMul, damageMultiplier(t));
   state.events.push({ type: 'bossSpawned', number, name: def.name });
 }

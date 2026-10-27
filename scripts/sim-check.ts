@@ -276,6 +276,22 @@ console.log(`Signatures and synergies: all ${everything.length} rolled and ran c
   if (bs.avgTickMs > 6 || !Number.isFinite(bs.stats.damageDealt)) failed = true;
 }
 
+// The Dragon shows up at 5:00 (and every minute after), never before.
+{
+  const sim = createSim({ worldSeed: WORLD_SEED, playerSeed: 3, godMode: true });
+  const seen: number[] = [];
+  for (let t = 0; t < 7 * 60 * TICK_RATE; t++) {
+    if (sim.offer) chooseUpgrade(sim, 0);
+    const before = sim.bossesSpawned;
+    stepSim(sim, { x: 0, y: 0 });
+    for (const ev of sim.events) if (ev.type === 'bossSpawned' && ev.name === 'Dragon') seen.push(sim.tick / TICK_RATE);
+    void before;
+  }
+  const ok = seen.length === 2 && Math.abs(seen[0]! - 300) < 0.1 && Math.abs(seen[1]! - 360) < 0.1;
+  console.log(`Dragon arrivals (s): ${seen.map((x) => x.toFixed(0)).join(', ') || 'none'} ${ok ? 'OK' : 'UNEXPECTED'}`);
+  if (!ok) failed = true;
+}
+
 // Every enemy kind (bosses included) is spawned next to a god-mode player and must behave:
 // finite positions, no pool overflow, and the shooters/summoners actually act.
 {
@@ -305,7 +321,7 @@ console.log(`Signatures and synergies: all ${everything.length} rolled and ran c
       console.log(`${ENEMY_DEFS[kind].name}: non-finite position`);
       failed = true;
     }
-    const acts = [EnemyKind.Spitter, EnemyKind.Lich, EnemyKind.Juggernaut].includes(kind) && shots === 0;
+    const acts = [EnemyKind.Spitter, EnemyKind.Lich, EnemyKind.Juggernaut, EnemyKind.Dragon].includes(kind) && shots === 0;
     if (acts) {
       console.log(`${ENEMY_DEFS[kind].name}: never fired a shot`);
       failed = true;

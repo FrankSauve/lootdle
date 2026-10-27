@@ -49,6 +49,7 @@ const KIND_DEBRIS: Record<EnemyKind, readonly number[]> = {
   [EnemyKind.Juggernaut]: [0x8a8fa3, 0x5c6070, 0xd9822b, 0xff4d6d],
   [EnemyKind.HiveQueen]: [0xffc94a, 0xc48a1e, 0xcfe8ff, 0x3a2a1a],
   [EnemyKind.Lich]: [0xe9e4d4, 0x4b2a7a, 0x7dffb0, 0xffc94a],
+  [EnemyKind.Dragon]: [0xc23a2b, 0x7a1f1a, 0xf2a03a, 0xffe14a],
 };
 /** Rings for enemy abilities, by style: bomb, heal, slam, spell. */
 const BLAST_COLORS = [0xff4d4d, 0x7dff9a, 0xffc94a, 0xb06bff];
@@ -178,6 +179,7 @@ export class GameRenderer {
       [EnemyKind.Juggernaut]: animated(art.juggernaut),
       [EnemyKind.HiveQueen]: animated(art.hiveQueen),
       [EnemyKind.Lich]: animated(art.lich),
+      [EnemyKind.Dragon]: animated(art.dragon),
     };
     this.torchFrames = art.torch.map(pixelTexture);
     this.knifeTexture = pixelTexture(art.knife);
