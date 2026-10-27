@@ -11,7 +11,7 @@ import {
   QUIRKS,
   RARITY_NAMES,
   RARITY_POWER,
-  RARITY_WEIGHTS,
+  LOOT_RARITY_WEIGHTS,
   SIGNATURES,
   SIGNATURE_CHANCE,
   SYNERGIES,
@@ -31,6 +31,8 @@ export interface Loadout {
   weapon: Item;
   armor: Item;
   trinket: Item;
+  /** Two more trinkets (a 5-item loadout), always different kinds from the first. */
+  extras: Item[];
   /** Fun name for the whole build, e.g. "The Walking Plague". */
   buildName: string;
   family: Family;
@@ -68,13 +70,20 @@ export function generateLoadout(playerSeed: number): Loadout {
 
   const weapon = rollWeapon(rng);
   const armor = rollArmor(rng);
-  const trinket = rollTrinket(rng);
+  const trinket = rollTrinket(rng, []);
+  const extras: Item[] = [];
+  const used = [trinket.id];
+  for (let k = 0; k < 2; k++) {
+    const extra = rollTrinket(rng, used);
+    used.push(extra.id);
+    extras.push(extra);
+  }
 
-  const items = [weapon, armor, trinket];
-  const bestRarity = Math.max(weapon.rarity, armor.rarity, trinket.rarity) as Rarity;
+  const items = [weapon, armor, trinket, ...extras];
+  const bestRarity = Math.max(...items.map((i) => i.rarity)) as Rarity;
   const { family, buildName } = nameBuild(items);
   const synergies = findSynergies(items);
-  return { seed: playerSeed >>> 0, weapon, armor, trinket, buildName, family, synergies, bestRarity };
+  return { seed: playerSeed >>> 0, weapon, armor, trinket, extras, buildName, family, synergies, bestRarity };
 }
 
 function rollWeapon(rng: Rng): Item {
@@ -91,8 +100,8 @@ function rollArmor(rng: Rng): Item {
   return finishItem(rng, 'armor', base.id, base.name, rarity, [...base.innate, ...extras]);
 }
 
-function rollTrinket(rng: Rng): Item {
-  const base = pick(rng, TRINKETS);
+function rollTrinket(rng: Rng, exclude: readonly string[]): Item {
+  const base = pick(rng, TRINKETS.filter((t) => !exclude.includes(t.id)));
   const rarity = rollRarity(rng);
   const extras = pickDistinct(rng, TRINKET_EFFECTS, EXTRA_EFFECTS.trinket[rarity]!, [base.effect]);
   return finishItem(rng, 'trinket', base.id, base.name, rarity, [base.effect, ...extras]);
@@ -146,10 +155,10 @@ function finishItem(
 }
 
 function rollRarity(rng: Rng): Rarity {
-  const total = RARITY_WEIGHTS.reduce((a, b) => a + b, 0);
+  const total = LOOT_RARITY_WEIGHTS.reduce((a, b) => a + b, 0);
   let roll = rng() * total;
-  for (let r = 0; r < RARITY_WEIGHTS.length; r++) {
-    roll -= RARITY_WEIGHTS[r]!;
+  for (let r = 0; r < LOOT_RARITY_WEIGHTS.length; r++) {
+    roll -= LOOT_RARITY_WEIGHTS[r]!;
     if (roll < 0) return r as Rarity;
   }
   return 0;
@@ -214,6 +223,11 @@ function nameBuild(items: readonly Item[]): { family: Family; buildName: string 
 }
 
 /** Human-readable lines for the loot cards. */
+/** All five items in the loadout, in display order. */
+export function loadoutItems(l: Loadout): Item[] {
+  return [l.weapon, l.armor, l.trinket, ...l.extras];
+}
+
 export interface ItemDescription {
   stats: string[];
   /** The signature power, if any. */

@@ -1,5 +1,6 @@
 import { buildShareText, copyText } from '../share.ts';
 import { RARITY_COLORS, RARITY_NAMES, SIGNATURES } from '../sim/items.ts';
+import { loadoutItems } from '../sim/loot.ts';
 import type { SimState } from '../sim/sim.ts';
 import { elapsedSeconds } from '../sim/sim.ts';
 import type { Loadout } from '../sim/sim.ts';
@@ -134,7 +135,7 @@ export class Hud {
   setLoadout(loadout: Loadout): void {
     const gear = q(this.topBar, '.hud-gear');
     gear.replaceChildren(
-      ...[loadout.weapon, loadout.armor, loadout.trinket].map((item) => {
+      ...loadoutItems(loadout).map((item) => {
         const slot = document.createElement('span');
         slot.className = 'hud-gear-slot';
         slot.style.setProperty('--rarity', cssColor(RARITY_COLORS[item.rarity]));
@@ -160,7 +161,7 @@ export class Hud {
     const loadout = state.loadout;
     q(this.results, '.hud-results-build').textContent = loadout.buildName;
     q(this.results, '.hud-results-gear').replaceChildren(
-      ...[loadout.weapon, loadout.armor, loadout.trinket].map((item) => {
+      ...loadoutItems(loadout).map((item) => {
         const row = document.createElement('div');
         row.className = 'hud-results-item';
         row.style.setProperty('--rarity', cssColor(RARITY_COLORS[item.rarity]));

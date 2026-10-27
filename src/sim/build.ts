@@ -4,6 +4,7 @@
  */
 import { armorById, fx, sx, weaponById, weaponRarityBonus } from './items.ts';
 import type { EffectId, Item, SignatureId } from './items.ts';
+import { loadoutItems } from './loot.ts';
 import type { Loadout } from './loot.ts';
 
 const BASE_HP = 100;
@@ -178,7 +179,7 @@ export function compileBuild(loadout: Loadout): Build {
   // Multipliers collected across items, applied at the end.
   const m = { damage: 1, attackSpeed: rb.haste, range: 1, swift: 0, hp: 1, slow: 1, clumsy: 1, size: rb.size, dmgMul: 1 };
 
-  for (const item of [loadout.weapon, loadout.armor, loadout.trinket]) {
+  for (const item of loadoutItems(loadout)) {
     for (const e of item.effects) applyEffect(b, m, e, item);
     if (item.signature) applySignature(b, m, item.signature, item.power);
     applyQuirk(b, m, item);

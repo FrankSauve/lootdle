@@ -11,7 +11,7 @@ import { compileBuild } from '../src/sim/build.ts';
 import { ENEMY_DEFS, EnemyKind } from '../src/sim/enemies.ts';
 import { RARITY_NAMES, SIGNATURES, SYNERGIES, WEAPONS } from '../src/sim/items.ts';
 import type { EffectId, Item, SignatureId, SynergyId } from '../src/sim/items.ts';
-import { findSynergies } from '../src/sim/loot.ts';
+import { findSynergies, loadoutItems } from '../src/sim/loot.ts';
 import { UPGRADES, makeOffer } from '../src/sim/upgrades.ts';
 import { createRng } from '../src/sim/rng.ts';
 import { DT, TICK_RATE, chooseUpgrade, createSim, elapsedSeconds, stepSim } from '../src/sim/sim.ts';
@@ -150,7 +150,7 @@ let lootDeterministic = true;
 for (let seed = 1; seed <= SAMPLE; seed++) {
   const l = generateLoadout(seed);
   if (JSON.stringify(l) !== JSON.stringify(generateLoadout(seed))) lootDeterministic = false;
-  for (const item of [l.weapon, l.armor, l.trinket]) {
+  for (const item of loadoutItems(l)) {
     rarityCounts[item.rarity]!++;
     quirked.total++;
     if (item.quirk) quirked.items++;
@@ -161,7 +161,7 @@ for (let seed = 1; seed <= SAMPLE; seed++) {
     console.log(`Seed ${seed}: non-finite result`);
     failed = true;
   }
-  points.push({ loot: l.weapon.rarity + l.armor.rarity + l.trinket.rarity, survived: r.survived });
+  points.push({ loot: loadoutItems(l).reduce((a, i) => a + i.rarity, 0), survived: r.survived });
 }
 console.log(`Loot determinism: ${lootDeterministic ? 'OK' : 'MISMATCH'}`);
 if (!lootDeterministic) failed = true;
@@ -193,7 +193,7 @@ for (let seed = 1; seed <= 3000; seed++) {
 }
 const s = run(240, true, 1, stress);
 console.log(
-  `Stress loadout "${stress!.buildName}" (${stress!.weapon.name} / ${stress!.armor.name} / ${stress!.trinket.name}): ` +
+  `Stress loadout "${stress!.buildName}" (${stress!.weapon.name} / ${stress!.armor.name} / ${stress!.trinket.name} +2): ` +
     `${s.stats.kills} kills in ${fmt(s.survived)}, ${s.avgTickMs.toFixed(3)} ms/tick avg, ` +
     `${s.slowestTickMs.toFixed(2)} ms slowest`,
 );
@@ -206,7 +206,7 @@ if (s.avgTickMs > 4) {
 const firstSeedWith = new Map<string, number>();
 for (let seed = 1; seed <= 6000; seed++) {
   const l = generateLoadout(seed);
-  for (const item of [l.weapon, l.armor, l.trinket]) {
+  for (const item of loadoutItems(l)) {
     if (item.signature && !firstSeedWith.has(`sig:${item.signature}`)) firstSeedWith.set(`sig:${item.signature}`, seed);
   }
   for (const s of l.synergies) if (!firstSeedWith.has(`syn:${s}`)) firstSeedWith.set(`syn:${s}`, seed);
@@ -236,10 +236,10 @@ console.log(`Signatures and synergies: all ${everything.length} rolled and ran c
   const item = (
     slot: Item['slot'], id: string, effects: EffectId[], signature: SignatureId | null = null, power = 2.4,
   ): Item => ({ slot, id, name: id, rarity: 4, power, effects, quirk: null, signature });
-  const make = (weapon: Item, armor: Item, trinket: Item): Loadout => {
-    const items = [weapon, armor, trinket];
+  const make = (weapon: Item, armor: Item, trinket: Item, extras: Item[] = []): Loadout => {
+    const items = [weapon, armor, trinket, ...extras];
     return {
-      seed: 1, weapon, armor, trinket, buildName: 'test', family: 'apocalypse',
+      seed: 1, weapon, armor, trinket, extras, buildName: 'test', family: 'apocalypse',
       synergies: findSynergies(items), bestRarity: 4,
     };
   };
@@ -281,6 +281,8 @@ console.log(`Signatures and synergies: all ${everything.length} rolled and ran c
   for (const kind of names) {
     const sim = createSim({ worldSeed: WORLD_SEED, playerSeed: 7, godMode: true });
     const mul = 3;
+    // Switch off every automatic power so the test subjects live long enough to act.
+    Object.assign(sim.build, { orbitBlades: 0, meteorEvery: 0, stormEvery: 0, vortexEvery: 0, scorchDps: 0, thornsDamage: 0 });
     for (let k = 0; k < 3; k++) sim.enemies.spawn(kind, 1000 + k * 20, 450 + k * 30, mul, mul);
     let shots = 0;
     let spawned = 0;

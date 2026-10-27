@@ -1,6 +1,7 @@
 /** Builds the text people paste into chats after a run, Wordle-style. */
 import { RARITY_NAMES, SIGNATURES } from './sim/items.ts';
 import type { Item } from './sim/items.ts';
+import { loadoutItems } from './sim/loot.ts';
 import type { SimState } from './sim/sim.ts';
 
 /** One colored square per rarity: common to legendary. */
@@ -24,7 +25,7 @@ function upgradeSquares(state: SimState): string {
 
 export function buildShareText(state: SimState, dateLabel: string, seconds: number): string {
   const { loadout, stats } = state;
-  const items = [loadout.weapon, loadout.armor, loadout.trinket];
+  const items = loadoutItems(loadout);
   const lines = [
     `LOOTDLE ${dateLabel}`,
     `${items.map((i) => RARITY_SQUARES[i.rarity]).join('')}  ${loadout.buildName}`,

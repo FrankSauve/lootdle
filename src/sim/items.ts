@@ -14,6 +14,8 @@ export const RARITY_NAMES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'] 
 export const RARITY_COLORS = [0xc4c4d4, 0x62d96b, 0x4da6ff, 0xc77bff, 0xffa63d] as const;
 /** Chance weights for rolling each rarity (out of 100). */
 export const RARITY_WEIGHTS = [40, 28, 17, 10, 5] as const;
+/** Daily loot is a little more generous than stat upgrades: 8% Legendary. */
+export const LOOT_RARITY_WEIGHTS = [38, 27, 17, 10, 8] as const;
 
 export type EffectId =
   // Offensive: can roll on weapons and trinkets.

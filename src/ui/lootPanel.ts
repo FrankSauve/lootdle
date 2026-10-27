@@ -2,15 +2,15 @@ import { itemIcon } from '../render/art/icons.ts';
 import type { PixelImage } from '../render/art/pixels.ts';
 import { ARMORS, RARITY_COLORS, RARITY_NAMES, SYNERGIES, TRINKETS, WEAPONS } from '../sim/items.ts';
 import type { Item } from '../sim/items.ts';
-import { describeItem } from '../sim/loot.ts';
+import { describeItem, loadoutItems } from '../sim/loot.ts';
 import type { Loadout } from '../sim/loot.ts';
 
 /** Height of one reel cell in CSS pixels (keep in sync with .reel-cell in style.css). */
 const CELL_H = 132;
 const POOLS = { weapon: WEAPONS, armor: ARMORS, trinket: TRINKETS } as const;
 /** Reel i spins for this long (ms) before it lands; they land one after another. */
-const reelDuration = (i: number) => 1700 + i * 1000;
-const reelCells = (i: number) => 26 + i * 12;
+const reelDuration = (i: number) => 1500 + i * 700;
+const reelCells = (i: number) => 24 + i * 8;
 const easeOutBack = (p: number) => {
   const c1 = 0.9;
   const c3 = c1 + 1;
@@ -99,7 +99,7 @@ export class LootPanel {
   private revealCards(loadout: Loadout): number {
     this.root.classList.remove('spinning');
     this.cards.replaceChildren(
-      ...[loadout.weapon, loadout.armor, loadout.trinket].map((item, i) => this.card(item, 0.25 + i * 0.6)),
+      ...loadoutItems(loadout).map((item, i) => this.card(item, 0.25 + i * 0.6)),
     );
 
     // Synergies pop in one by one after the three cards, then the build name, then the prompt.
@@ -139,7 +139,7 @@ export class LootPanel {
     this.synergies.replaceChildren();
     this.build.textContent = '';
 
-    const items = [loadout.weapon, loadout.armor, loadout.trinket];
+    const items = loadoutItems(loadout);
     const strips: HTMLElement[] = [];
     const reels: HTMLElement[] = [];
     const cols = items.map((item, i) => {

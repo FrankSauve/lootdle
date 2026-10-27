@@ -1,7 +1,7 @@
 import { SETTING_DEFS } from '../settings.ts';
 import type { SettingsStore } from '../settings.ts';
 import { RARITY_COLORS, RARITY_NAMES } from '../sim/items.ts';
-import { describeItem } from '../sim/loot.ts';
+import { describeItem, loadoutItems } from '../sim/loot.ts';
 import type { SimState } from '../sim/sim.ts';
 import { elapsedSeconds } from '../sim/sim.ts';
 import { BASE_CRIT_DAMAGE, MAX_ARMOR, MAX_CRIT_CHANCE, MAX_LIFESTEAL, UPGRADES, UPGRADE_STATS } from '../sim/upgrades.ts';
@@ -106,7 +106,7 @@ export class SettingsWindow {
     // Loot.
     const lootCol = el('section', 'pause-col');
     lootCol.append(el('h3', 'pause-heading', loadout.buildName));
-    for (const item of [loadout.weapon, loadout.armor, loadout.trinket]) {
+    for (const item of loadoutItems(loadout)) {
       const d = describeItem(item);
       const row = el('div', 'pause-item');
       row.style.setProperty('--rarity', cssColor(RARITY_COLORS[item.rarity]));
