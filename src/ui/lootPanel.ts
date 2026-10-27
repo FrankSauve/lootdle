@@ -41,7 +41,7 @@ export function imageCanvas(img: PixelImage, scale: number): HTMLCanvasElement {
 }
 
 /**
- * The "Today's loot" reveal shown before each run: the three items are revealed one after
+ * The "Today's loot" reveal shown before each run: the five items are revealed one after
  * another, then the build name. Starting the run (moving) is handled by the caller.
  */
 export class LootPanel {
@@ -77,7 +77,7 @@ export class LootPanel {
   }
 
   /**
-   * Shows today's loot. Without `spin` the three cards are revealed one after another and the
+   * Shows today's loot. Without `spin` the five cards are revealed one after another and the
    * return value is how many milliseconds that takes. With `spin` the player first gets a slot
    * machine: they press Spin, the reels land one at a time, and then the cards are revealed;
    * the return value is Infinity and `onReady` is called once the reveal has finished.
@@ -99,11 +99,11 @@ export class LootPanel {
   private revealCards(loadout: Loadout): number {
     this.root.classList.remove('spinning');
     this.cards.replaceChildren(
-      ...loadoutItems(loadout).map((item, i) => this.card(item, 0.25 + i * 0.6)),
+      ...loadoutItems(loadout).map((item, i) => this.card(item, 0.25 + i * 0.4)),
     );
 
-    // Synergies pop in one by one after the three cards, then the build name, then the prompt.
-    let t = 2.0;
+    // Synergies pop in one by one after the cards, then the build name, then the prompt.
+    let t = 0.25 + loadoutItems(loadout).length * 0.4 + 0.2;
     this.synergies.replaceChildren(
       ...loadout.synergies.map((id) => {
         const def = SYNERGIES[id];
@@ -127,7 +127,7 @@ export class LootPanel {
     this.root.hidden = true;
     void this.root.offsetWidth;
     this.root.hidden = false;
-    return Math.min(3200, (t + 0.5) * 1000);
+    return Math.min(4200, (t + 0.5) * 1000);
   }
 
   // ---- Slot machine -------------------------------------------------------------------------
@@ -190,7 +190,7 @@ export class LootPanel {
         if (token !== this.token) return;
         const ms = this.revealCards(loadout);
         this.go.hidden = false;
-        window.setTimeout(() => token === this.token && onReady?.(), Math.min(ms, 3200) - 800);
+        window.setTimeout(() => token === this.token && onReady?.(), Math.min(ms, 4200) - 800);
       });
     };
     button.addEventListener('click', start);
@@ -229,7 +229,7 @@ export class LootPanel {
     done: () => void,
   ): void {
     const t0 = performance.now();
-    const landed = [false, false, false];
+    const landed = strips.map(() => false);
     const frame = (now: number) => {
       if (token !== this.token) return;
       const elapsed = now - t0;
